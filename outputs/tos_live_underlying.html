@@ -130,7 +130,18 @@
       color: #dbeafe;
       font-size: 12px;
       font-weight: 500;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(148, 163, 184, 0.16) transparent;
     }
+    .option-chain-panel::-webkit-scrollbar, .near-atm-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
+    .option-chain-panel::-webkit-scrollbar-track, .near-atm-scroll::-webkit-scrollbar-track { background: transparent; }
+    .option-chain-panel::-webkit-scrollbar-thumb, .near-atm-scroll::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.08);
+      border-radius: 999px;
+      border: 1px solid transparent;
+      background-clip: content-box;
+    }
+    .option-chain-panel:hover::-webkit-scrollbar-thumb, .near-atm-scroll:hover::-webkit-scrollbar-thumb { background-color: rgba(148, 163, 184, 0.16); }
     .chk {
       display: inline-block;
       width: 15px; height: 15px;
@@ -145,14 +156,38 @@
     .chk.on { border-color: var(--green); }
     .chk.on::after { content: "\2713"; color: var(--green); font-weight: 900; }
     .near-atm-table td:nth-child(2), .near-atm-table th:nth-child(2) { text-align: center; }
+    .strike-pick {
+      display: inline-grid;
+      grid-template-columns: 15px minmax(42px, auto) 15px;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-width: 78px;
+    }
+    .strike-pick .chk { margin: 0; }
+    .strike-pick-head {
+      display: inline-grid;
+      grid-template-columns: 15px minmax(42px, auto) 15px;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-width: 78px;
+    }
+    .strike-pick-head span:first-child,
+    .strike-pick-head span:last-child { color: var(--red); font-size: 15px; font-weight: 900; }
+    .near-atm-table .chk.on::after { content: "\2713"; font-size: 12px; line-height: 13px; font-weight: 900; }
+    .near-atm-table .chk.is-short { border-color: var(--red); }
+    .near-atm-table .chk.is-short::after { color: var(--red); }
+    .near-atm-table .chk.is-long { border-color: var(--green); }
+    .near-atm-table .chk.is-long::after { color: var(--green); }
     .chain-table td.chk-cell { text-align: center; }
     .chain-table td.chk-cell .chk { margin: 0; }
     /* Strategy panel */
     .strat-item {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 9px 4px;
+      padding: 9px 18px 9px 4px;
       cursor: pointer;
       font-size: 13px;
       font-weight: 600;
@@ -161,7 +196,16 @@
     .strat-item:hover { color: #fff; }
     .strat-item .chk { margin: 0; }
     .strat-legs { margin-top: 8px; }
-    .strat-legs .legs-title { color: #fff; font-size: 12px; font-weight: 700; margin: 4px 0 8px; }
+    #strategyPanel { position: fixed; }
+    #strategyPanel .chain-head {
+      display: inline-flex;
+      margin: 0 14px 0 0;
+      vertical-align: middle;
+    }
+    #strategyPanel .chain-title::after { content: ":"; }
+    #strategyPanel .strat-item { vertical-align: middle; }
+    #strategyPanel .strat-legs { margin-top: 10px; }
+    .strat-legs .legs-title { color: #fff; font-size: 13px; font-weight: 700; margin: 4px 0 8px; }
     .strat-legs .legs-hint { color: var(--muted); font-size: 11px; padding: 6px 2px; }
     .legs-summary { color: #cbd5e1; font-size: 11px; margin-top: 8px; line-height: 1.6; }
     .legs-summary b { font-weight: 700; }
@@ -173,11 +217,17 @@
     .legs-table td { color: #dbeafe; text-align: left; padding: 5px 10px 5px 0; border-bottom: 1px solid rgba(21,25,31,.86); }
     .side-short { color: var(--red); font-weight: 700; }
     .side-long { color: var(--green); font-weight: 700; }
+    .strat-actions { position: absolute; top: 18px; right: 34px; display: flex; align-items: center; gap: 10px; z-index: 2; }
+    .send-btn { height: 30px; border: 1px solid rgba(34,211,238,.42); background: rgba(5,8,13,.64); color: #e0f7ff; border-radius: 8px; padding: 0 18px; font: inherit; font-size: 12px; font-weight: 900; cursor: pointer; letter-spacing: .04em; }
+    .send-btn:hover { border-color: var(--green); background: rgba(0,230,118,.15); color: #ffffff; }
+    .send-status { font-size: 11px; color: var(--muted); font-weight: 600; }
+    .send-status.ok { color: var(--green); }
+    .send-status.err { color: var(--red); }
     /* Payoff chart: STRAT top work area, with P&L docked below it. */
     .payoff-chart {
       position: fixed;
       left: 772px;
-      right: 24px;
+      right: 334px;
       top: 96px;
       height: 54vh;
       z-index: 21;
@@ -211,61 +261,83 @@
       color: #dbeafe;
     }
     .summary-panel[hidden] { display: none; }
-    .sum-sub { color: #fff; font-size: 12px; font-weight: 700; margin: 2px 0 12px; }
-    .sum-grid { display: grid; grid-template-columns: 150px 150px 110px 110px 190px; justify-content: start; gap: 12px 32px; }
+    .sum-sub { color: #fff; font-size: 13px; font-weight: 700; margin: 2px 0 12px; }
+    .sum-grid { display: grid; grid-template-columns: 140px 140px 100px 100px 120px 120px; justify-content: start; gap: 12px 32px; }
     .sum-k { color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
     .sum-v { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 3px; }
     .sum-v.pos { color: var(--green); }
     .sum-v.neg { color: var(--red); }
     .sum-v.be { color: var(--cyan); font-size: 15px; grid-column: 1 / -1; }
     .sum-foot { color: #cbd5e1; font-size: 13px; margin-top: 14px; line-height: 1.65; border-top: 1px solid rgba(203,213,225,.18); padding-top: 10px; }
-    .iv-line { display: grid; grid-template-columns: 44px max-content; gap: 10px; align-items: baseline; }
-    .iv-line b { color: #fff; font-weight: 800; }
-    .iv-line .value { color: var(--cyan); font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums; }
-    .greeks-table { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
-    .greeks-table th { color: var(--muted); font-size: 10px; text-align: right; padding: 4px 5px 6px; border-bottom: 1px solid rgba(203,213,225,.25); }
+
+    .premium-box { display: inline-grid; grid-template-columns: auto auto; gap: 7px 18px; align-items: baseline; margin: 14px 0 4px; padding: 10px 12px; border: 1px solid rgba(34,211,238,.42); border-radius: 8px; background: rgba(5,8,13,.55); font-variant-numeric: tabular-nums; }
+    .premium-box .premium-title { grid-column: 1 / -1; color: #fff; font-size: 12px; font-weight: 900; }
+    .premium-box .label { color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }
+    .premium-box .value { color: var(--cyan); font-size: 14px; font-weight: 900; text-align: right; }
+    .premium-box .total .label, .premium-box .total .value { color: var(--green); }
+    .premium-box .source { grid-column: 1 / -1; color: #94a3b8; font-size: 11px; font-weight: 700; }
+    .greeks-table { width: auto; min-width: 840px; margin-top: 10px; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 13px; font-variant-numeric: tabular-nums; }
+    .greeks-table colgroup col:nth-child(1) { width: 180px; }
+    .greeks-table colgroup col:nth-child(2) { width: 50px; }
+    .greeks-table colgroup col:nth-child(3) { width: 70px; }
+    .greeks-table colgroup col:nth-child(4) { width: 70px; }
+    .greeks-table colgroup col:nth-child(5), .greeks-table colgroup col:nth-child(6), .greeks-table colgroup col:nth-child(7), .greeks-table colgroup col:nth-child(8), .greeks-table colgroup col:nth-child(9) { width: auto; }
+    .greeks-table th { color: #dbeafe; font-size: 13px; font-weight: 700; text-align: left; padding: 7px 24px 9px 0; border-bottom: 1px solid rgba(203,213,225,.34); }
     .greeks-table th:first-child, .greeks-table td:first-child { text-align: left; color: #fff; }
-    .greeks-table td { color: var(--cyan); text-align: right; padding: 4px 5px; border-bottom: 1px solid rgba(21,25,31,.75); font-weight: 700; }
-    .greeks-table tr.net td { color: var(--green); }
+    .greeks-table td { color: var(--cyan); text-align: left; padding: 6px 24px 6px 0; border-bottom: 1px solid rgba(21,25,31,.62); font-weight: 600; white-space: nowrap; }
+    .greeks-table th:nth-child(6), .greeks-table td:nth-child(6) { padding-left: 26px; }
+    .greeks-table th:nth-child(5), .greeks-table td:nth-child(5) { padding-right: 38px; }
+    .greeks-table tr.net td { color: var(--green); font-size: 14px; font-weight: 800; padding-top: 8px; border-top: 1px solid rgba(0,230,118,.45); }
+    .greeks-table tr.net td:first-child { letter-spacing: .01em; }
     .option-chain-panel[hidden] { display: none; }
-    /* STRAT view: option chain docked as a full-height LEFT sidebar */
+    /* STRAT view: strategy panel above the two vertical chain panels */
     .strat-mode .option-chain-panel {
       left: 24px;
       right: auto;
-      top: 96px;
+      top: calc(96px + 178px + 16px);
       bottom: auto;
-      height: 70vh;
+      height: calc(100vh - 96px - 178px - 40px);
       width: 340px;
     }
-    /* STRAT view: second panel (near-ATM strikes) to the right of the chain */
     .strat-mode .near-atm-panel {
       left: 388px;
       right: auto;
-      top: 96px;
+      top: calc(96px + 178px + 16px);
       bottom: auto;
-      height: 70vh;
+      height: calc(100vh - 96px - 178px - 40px);
       width: 360px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
-    /* STRAT view: strategy panel below the two top panels */
+    .near-atm-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(148, 163, 184, 0.16) transparent;
+    }
+    .near-atm-panel .chain-table { table-layout: fixed; }
     .strat-mode .strategy-panel {
       left: 24px;
       right: auto;
-      top: calc(96px + 70vh + 16px);
-      bottom: 24px;
-      height: auto;
+      top: 96px;
+      bottom: auto;
+      height: 178px;
       width: 724px;
     }
     .chain-table tr.atm td { color: var(--yellow); font-weight: 700; }
     /* keep the spot card out of the panels: dock it bottom-right (empty area) */
     .strat-mode .spot-card { display: none; }
     .chain-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
-    .chain-title { color: #fff; font-size: 14px; font-weight: 700; text-transform: lowercase; }
-    .chain-meta { color: var(--muted); font-size: 11px; }
+    .chain-title { color: #fff; font-size: 15px; font-weight: 800; text-transform: none; }
+    .chain-meta { color: var(--cyan); font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
     .chain-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
     .chain-table th { color: var(--muted); font-size: 11px; text-align: right; padding: 5px 4px 7px; border-bottom: 1px solid rgba(203,213,225,.36); }
     .chain-table th:first-child, .chain-table td:first-child { text-align: left; }
     .chain-table td { color: #dbeafe; text-align: right; padding: 4px; border-bottom: 1px solid rgba(21,25,31,.86); }
-    .chain-table tr:first-child td { color: var(--cyan); }
+    .chain-table tr:first-child td { color: #dbeafe; }
     .chain-table tr:hover td { background: rgba(34, 211, 238, 0.08); }
     #optionChainRows tr { cursor: pointer; }
     .side-panel {
@@ -284,6 +356,29 @@
     .side-row .label { color: #fff; opacity: .94; }
     .side-row .value { color: var(--cyan); font-variant-numeric: tabular-nums; }
     .side-sep { height: 1px; background: rgba(203,213,225,.45); margin: 14px 0; }
+    .strat-live-panel {
+      display: none;
+      position: fixed;
+      right: 24px;
+      top: 96px;
+      z-index: 24;
+      width: 286px;
+      height: 54vh;
+      color: #cbd5e1;
+      font-size: 13px;
+      font-weight: 800;
+      pointer-events: none;
+      padding: 18px 18px 16px;
+      border: 1px solid rgba(34, 211, 238, 0.28);
+      border-radius: 14px;
+      background: rgba(5, 8, 13, 0.88);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.38);
+      backdrop-filter: blur(12px);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.85);
+      display: none;
+      align-content: center;
+    }
+    .strat-mode .strat-live-panel { display: grid; }
     .status {
       position: fixed;
       right: 28px;
@@ -296,7 +391,9 @@
       border: 1px solid #1d2634;
       border-radius: 999px;
       padding: 8px 12px;
-      pointer-events: none;
+      pointer-events: auto;
+      text-decoration: none;
+      cursor: pointer;
     }
     .status.live { color: var(--green); border-color: rgba(0,230,118,.35); }
     .status.err { color: var(--red); border-color: rgba(255,59,79,.35); }
@@ -328,7 +425,6 @@
     <div class="mode-pills"><button class="pill active" type="button">Spot</button><button class="pill" type="button">UNDERLYING_BID</button></div>
     <div class="right-tools">
       <select id="symbolSelect" aria-label="Simbolo"><option>MU</option></select>
-      <label id="fileLabel" class="file-btn" for="csvInput">CSV</label>
       <button id="chainToggle" class="file-btn" type="button">STRAT</button>
       <input id="csvInput" type="file" accept=".csv,text/csv">
     </div>
@@ -341,7 +437,7 @@
   </aside>
 
   <aside class="side-panel">
-    <div class="side-title">live tos</div>
+    <div class="side-title">Live</div>
     <div class="side-row"><span class="label">spot</span><span class="value" id="sideSpot">--</span></div>
     <div class="side-row"><span class="label">last tick</span><span class="value" id="sideTime">--</span></div>
     <div class="side-row"><span class="label">samples</span><span class="value" id="sideSamples">0</span></div>
@@ -351,29 +447,44 @@
     <div class="side-row"><span class="label">mark</span><span class="value" id="sideMark">--</span></div>
     <div class="side-row"><span class="label">volume</span><span class="value" id="sideVol">--</span></div>
   </aside>
-  <div id="status" class="status">esperando CSV</div>
+  <aside class="strat-live-panel">
+    <div class="side-title">Live</div>
+    <div class="side-row"><span class="label">spot</span><span class="value" id="stratSideSpot">--</span></div>
+    <div class="side-row"><span class="label">last tick</span><span class="value" id="stratSideTime">--</span></div>
+    <div class="side-row"><span class="label">samples</span><span class="value" id="stratSideSamples">0</span></div>
+    <div class="side-sep"></div>
+    <div class="side-row"><span class="label">bid</span><span class="value" id="stratSideBid">--</span></div>
+    <div class="side-row"><span class="label">ask</span><span class="value" id="stratSideAsk">--</span></div>
+    <div class="side-row"><span class="label">mark</span><span class="value" id="stratSideMark">--</span></div>
+    <div class="side-row"><span class="label">volume</span><span class="value" id="stratSideVol">--</span></div>
+  </aside>
+  <a id="status" class="status" href="/api/tos-live-csv" target="_blank" rel="noopener">esperando CSV</a>
   <aside id="optionChainPanel" class="option-chain-panel" hidden>
-    <div class="chain-head"><div class="chain-title">option chain</div><div class="chain-meta">MU - expirations</div></div>
+    <div class="chain-head"><div class="chain-title">Option Chain</div><div class="chain-meta">MU</div></div>
     <table class="chain-table">
       <thead><tr><th>Expiration</th><th>DTE</th><th>Calls</th><th>Puts</th><th>Total</th><th></th></tr></thead>
       <tbody id="optionChainRows"></tbody>
     </table>
   </aside>
   <aside id="nearAtmPanel" class="option-chain-panel near-atm-panel" hidden>
-    <div class="chain-head"><div class="chain-title">near atm</div><div class="chain-meta" id="nearAtmMeta">MU</div></div>
-    <table class="chain-table near-atm-table">
-      <thead><tr><th>Call</th><th>Strike</th><th>Put</th></tr></thead>
-      <tbody id="nearAtmRows"></tbody>
+    <div class="chain-head"><div class="chain-title">Strikes</div><div class="chain-meta" id="nearAtmMeta">--</div></div>
+    <table class="chain-table near-atm-table near-atm-head-table">
+      <thead><tr><th>Call</th><th><span class="strike-pick-head"><span>S</span><span>Strike</span><span>S</span></span></th><th>Put</th></tr></thead>
     </table>
+    <div id="nearAtmScroll" class="near-atm-scroll">
+      <table class="chain-table near-atm-table near-atm-body-table">
+        <tbody id="nearAtmRows"></tbody>
+      </table>
+    </div>
   </aside>
   <aside id="strategyPanel" class="option-chain-panel strategy-panel" hidden>
-    <div class="chain-head"><div class="chain-title">strategy</div></div>
+    <div class="chain-head"><div class="chain-title">Strategy</div></div>
     <div class="strat-item" data-strategy="short_straddle"><span class="chk"></span> Short Straddle</div>
+    <div class="strat-item" data-strategy="short_strangle"><span class="chk"></span> Short Strangle</div>
     <div id="strategyLegs" class="strat-legs"></div>
   </aside>
   <div id="payoffChart" class="payoff-chart" hidden></div>
   <aside id="strategySummary" class="summary-panel" hidden>
-    <div class="chain-head"><div class="chain-title">strategy p&l</div></div>
     <div id="summaryBody"></div>
   </aside>
 
@@ -402,16 +513,16 @@
       ["2028-06-16", 722, 215, 212, 427],
       ["2028-12-15", 904, 234, 221, 455]
     ];
-    // Near-ATM strikes (from get_near_ATM_strikes.py) — MU 2026-06-26, ATM 1215.
+    // Near-ATM strikes (from get_near_ATM_strikes.py) ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â MU 2026-06-26, ATM 1215, DTE 0, 51 strikes
     const NEAR_ATM = {
       symbol: "MU",
       expiration: "2026-06-26",
       atm: 1215,
-      strikes: [1165,1170,1175,1180,1185,1190,1195,1200,1205,1210,1215,1220,1225,1230,1235,1240,1245,1250,1255,1260,1265],
-      putsMissing: new Set([1215, 1235, 1245, 1265]),
+      strikes: [1090,1095,1100,1105,1110,1115,1120,1125,1130,1135,1140,1145,1150,1155,1160,1165,1170,1175,1180,1185,1190,1195,1200,1205,1210,1215,1220,1225,1230,1235,1240,1245,1250,1255,1260,1265,1270,1275,1280,1285,1290,1295,1300,1305,1310,1315,1320,1325,1330,1335,1340],
+      putsMissing: new Set([1215, 1235, 1245, 1265, 1275, 1285, 1295, 1305, 1315, 1325]),
     };
     const ACTIVE_STRATEGY_KEY = "tos_live_active_strategy";
-    const state = { rows: [], symbol: "MU", file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, strategy: null, payoff: null, activeStrategy: null };
+    const state = { rows: [], symbol: "MU", file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null };
     const $ = id => document.getElementById(id);
 
     function parseCsv(text) {
@@ -441,12 +552,39 @@
       return Number.isFinite(n) ? n : null;
     }
     function fmt2(v) { return v == null ? "--" : nf2.format(v); }
-    function tosPrice(v) {
+    function fmtGroup0(v) {
+      if (v == null) return "--";
+      const n = Math.round(Number(v));
+      if (!Number.isFinite(n)) return "--";
+      const sign = n < 0 ? "-" : "";
+      return sign + String(Math.abs(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    }
+    function fmtMoney0(v) { return v == null ? "--" : `$ ${fmtGroup0(v)}`; }
+    function fmtBE0(v) { return fmtGroup0(v); }
+    function parseLocalDate(dateText) {
+      const parts = String(dateText || "").split("-").map(Number);
+      if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return null;
+      return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+    function dteByDate(expiration) {
+      const expDate = parseLocalDate(expiration);
+      if (!expDate) return null;
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return Math.max(0, Math.round((expDate.getTime() - today.getTime()) / 86400000));
+    }
+    function tosPrice(v, field = "BID") {
       const n = val(v);
       if (n == null) return null;
-      if (Math.abs(n) >= 1000000) return n / 1000;
-      if (Math.abs(n) >= 10000) return n / 100;
-      return n;
+      const f = String(field || "").toUpperCase();
+      if (f.includes("BID") || f.includes("ASK")) {
+        let x = n;
+        while (Math.abs(x) >= 10000) x = x / 100;
+        return x;
+      }
+      if (f.includes("LAST")) return Math.abs(n) >= 1000000 ? n / 10000 : (Math.abs(n) >= 10000 ? n / 100 : n);
+      if (f.includes("MARK")) return Math.abs(n) >= 1000000 ? n / 1000 : (Math.abs(n) >= 10000 ? n / 100 : n);
+      return Math.abs(n) >= 10000 ? n / 100 : n;
     }
     function fmt0(v) { return v == null ? "--" : nf0.format(v); }
     function esc(s) { return String(s || "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
@@ -456,27 +594,41 @@
         const raw = localStorage.getItem(ACTIVE_STRATEGY_KEY);
         if (!raw) return null;
         const d = JSON.parse(raw);
-        const values = [d.strike, d.be_low, d.be_high].map(Number);
-        if (d.type !== "short_straddle" || values.some(v => !Number.isFinite(v))) return null;
-        return { ...d, strike: values[0], be_low: values[1], be_high: values[2] };
+        const values = [d.be_low, d.be_high].map(Number);
+        if (!Number.isFinite(values[0]) || !Number.isFinite(values[1])) return null;
+        if (d.type === "short_straddle") {
+          const strike = Number(d.strike);
+          if (!Number.isFinite(strike)) return null;
+          return { ...d, strike, be_low: values[0], be_high: values[1] };
+        }
+        if (d.type === "short_strangle") {
+          const putStrike = Number(d.put_strike), callStrike = Number(d.call_strike);
+          if (![putStrike, callStrike].every(Number.isFinite)) return null;
+          return { ...d, put_strike: putStrike, call_strike: callStrike, be_low: values[0], be_high: values[1] };
+        }
+        return null;
       } catch (_) { return null; }
     }
     function saveActiveStrategy(d) {
       if (!d) return;
       const payload = {
-        type: "short_straddle",
+        type: d.strategy || "short_straddle",
         symbol: d.symbol || state.symbol,
         expiration: d.expiration,
         strike: Number(d.strike),
+        put_strike: Number(d.put_strike),
+        call_strike: Number(d.call_strike),
         be_low: Number(d.be_low),
         be_high: Number(d.be_high),
         saved_at: Date.now()
       };
-      if ([payload.strike, payload.be_low, payload.be_high].some(v => !Number.isFinite(v))) return;
+      const required = payload.type === "short_strangle"
+        ? [payload.put_strike, payload.call_strike, payload.be_low, payload.be_high]
+        : [payload.strike, payload.be_low, payload.be_high];
+      if (required.some(v => !Number.isFinite(v))) return;
       try { localStorage.setItem(ACTIVE_STRATEGY_KEY, JSON.stringify(payload)); } catch (_) {}
       state.activeStrategy = payload;
-    }
-    function clearActiveStrategy() {
+    }    function clearActiveStrategy() {
       try { localStorage.removeItem(ACTIVE_STRATEGY_KEY); } catch (_) {}
       state.activeStrategy = null;
     }
@@ -484,7 +636,7 @@
 
     function renderOptionChain() {
       $("optionChainRows").innerHTML = OPTION_CHAIN.map(([expiration, dte, calls, puts, total]) =>
-        `<tr class="oc-row" data-expiration="${expiration}" data-dte="${dte}"><td>${expiration}</td><td>${dte}</td><td>${nf0.format(calls)}</td><td>${nf0.format(puts)}</td><td>${nf0.format(total)}</td><td class="chk-cell"><span class="chk"></span></td></tr>`
+        `<tr class="oc-row" data-expiration="${expiration}" data-dte="${dteByDate(expiration) ?? dte}"><td>${expiration}</td><td>${dteByDate(expiration) ?? dte}</td><td>${nf0.format(calls)}</td><td>${nf0.format(puts)}</td><td>${nf0.format(total)}</td><td class="chk-cell"><span class="chk"></span></td></tr>`
       ).join("");
     }
     function toggleOptionChain() {
@@ -500,26 +652,46 @@
       if (state.nearAtm && Array.isArray(state.nearAtm.strikes)) {
         const d = state.nearAtm;
         return {
-          symbol: d.symbol, expiration: d.expiration, atm: d.atm,
+          symbol: d.symbol, expiration: d.expiration, dte: d.dte, atm: d.atm, spot: d.spot,
           rows: d.strikes.map(s => [s.strike, s.call, s.put]),
         };
       }
       const yy = NEAR_ATM.expiration.slice(2).replace(/-/g, "");  // 260626
       return {
-        symbol: NEAR_ATM.symbol, expiration: NEAR_ATM.expiration, atm: NEAR_ATM.atm,
+        symbol: NEAR_ATM.symbol, expiration: NEAR_ATM.expiration, dte: dteByDate(NEAR_ATM.expiration), atm: NEAR_ATM.atm, spot: NEAR_ATM.spot,
         rows: NEAR_ATM.strikes.map(k => [
           k, `.${NEAR_ATM.symbol}${yy}C${k}`,
           NEAR_ATM.putsMissing.has(k) ? null : `.${NEAR_ATM.symbol}${yy}P${k}`,
         ]),
       };
     }
+    function dteForExpiration(expiration) {
+      const dateDte = dteByDate(expiration);
+      if (dateDte != null) return dateDte;
+      const row = document.querySelector(`#optionChainRows tr[data-expiration="${expiration}"]`);
+      if (row && row.dataset.dte !== undefined && row.dataset.dte !== "") return Number(row.dataset.dte);
+      const item = OPTION_CHAIN.find(([exp]) => exp === expiration);
+      if (item) return Number(item[1]);
+      return null;
+    }
+    function centerAtmRow() {
+      const scroller = $("nearAtmScroll");
+      const row = document.querySelector("#nearAtmRows tr.atm");
+      if (!scroller || !row) return;
+      requestAnimationFrame(() => {
+        const top = row.offsetTop - (scroller.clientHeight / 2) + (row.offsetHeight / 2);
+        scroller.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      });
+    }
     function renderNearAtm() {
       const m = nearAtmModel();
       const fmtK = k => Number.isInteger(k) ? k : String(k);
       $("nearAtmRows").innerHTML = m.rows.map(([k, call, put]) =>
-        `<tr class="${k === m.atm ? "atm" : ""}" data-strike="${k}"><td>${esc(call || "—")}</td><td>${fmtK(k)}<span class="chk"></span></td><td>${esc(put || "—")}</td></tr>`
+        `<tr class="${k === m.atm ? "atm" : ""}" data-strike="${k}"><td>${esc(call || "-")}</td><td><span class="strike-pick"><span class="chk"></span><span>${fmtK(k)}</span><span class="chk"></span></span></td><td>${esc(put || "-")}</td></tr>`
       ).join("");
-      $("nearAtmMeta").textContent = `${m.symbol} · ${m.expiration} · atm ${fmtK(m.atm)}`;
+      const dte = m.dte ?? dteForExpiration(m.expiration);
+      $("nearAtmMeta").textContent = `${m.expiration} - DTE ${dte} - ATM ${fmtK(m.atm)}`;
+      centerAtmRow();
     }
     function markOcRow(expiration) {
       document.querySelectorAll("#optionChainRows .chk").forEach(c => c.classList.remove("on"));
@@ -536,15 +708,25 @@
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         state.nearAtm = await res.json();
         state.selectedStrike = null;  // strike picked for the old expiration no longer applies
+        state.selectedPutStrike = null;
+        state.selectedCallStrike = null;
+        state.defaultStrategyApplied = false;
         renderNearAtm();
         markOcRow(state.nearAtm.expiration);
+        if (applyDefaultShortStraddle()) return;
         renderStrategy();
         return;
       } catch (err) { /* fall back to the static export below */ }
       try {
         const res = await fetch(`/outputs/near_atm_strikes.json?ts=${Date.now()}`, { cache: "no-store" });
-        if (res.ok) { state.nearAtm = await res.json(); renderNearAtm(); markOcRow(state.nearAtm.expiration); }
+        if (res.ok) { state.nearAtm = await res.json(); state.selectedStrike = null; state.selectedPutStrike = null; state.selectedCallStrike = null; state.defaultStrategyApplied = false; renderNearAtm(); markOcRow(state.nearAtm.expiration); if (applyDefaultShortStraddle()) return; renderStrategy(); }
       } catch (err) { /* keep embedded fallback */ }
+      if (state.stratMode && !state.defaultStrategyApplied) {
+        renderNearAtm();
+        markOcRow(nearAtmModel().expiration);
+        if (applyDefaultShortStraddle()) return;
+        renderStrategy();
+      }
     }
     function legSymbol(strike, type) {
       if (state.nearAtm && Array.isArray(state.nearAtm.strikes)) {
@@ -553,16 +735,128 @@
       }
       return null;
     }
-    function selectStrike(tr) {
-      document.querySelectorAll("#nearAtmRows .chk").forEach(c => c.classList.remove("on"));
-      const c = tr.querySelector(".chk"); if (c) c.classList.add("on");
+    function resetStrikeChecks() {
+      document.querySelectorAll("#nearAtmRows .chk").forEach(c => c.classList.remove("on", "is-short", "is-long"));
+    }
+    function setStrikeCheckSide(chk, side = "S") {
+      if (!chk) return;
+      chk.classList.add("on");
+      chk.classList.toggle("is-short", side !== "L");
+      chk.classList.toggle("is-long", side === "L");
+    }
+    function toggleStrikeCheckSide(chk) {
+      if (!chk || !chk.classList.contains("on")) return;
+      setStrikeCheckSide(chk, chk.classList.contains("is-short") ? "L" : "S");
+    }
+    function markStrikeRow(tr) {
+      resetStrikeChecks();
+      if (!tr) return false;
+      tr.querySelectorAll(".chk").forEach(c => setStrikeCheckSide(c, "S"));
       state.selectedStrike = Number(tr.dataset.strike);
+      state.selectedPutStrike = null;
+      state.selectedCallStrike = null;
+      return Number.isFinite(state.selectedStrike);
+    }
+    function markShortStrangleLegs(putStrike, callStrike) {
+      resetStrikeChecks();
+      const putRow = document.querySelector(`#nearAtmRows tr[data-strike="${Number(putStrike)}"]`);
+      const callRow = document.querySelector(`#nearAtmRows tr[data-strike="${Number(callStrike)}"]`);
+      if (putRow) {
+        const checkboxes = putRow.querySelectorAll(".chk");
+        if (checkboxes[1]) setStrikeCheckSide(checkboxes[1], "S");
+      }
+      if (callRow) {
+        const checkboxes = callRow.querySelectorAll(".chk");
+        if (checkboxes[0]) setStrikeCheckSide(checkboxes[0], "S");
+      }
+    }
+    function selectStrangleLeg(tr, side) {
+      if (!tr) return;
+      const strike = Number(tr.dataset.strike);
+      if (!Number.isFinite(strike)) return;
+      if (side === "CALL") {
+        state.selectedCallStrike = strike;
+        if (!Number.isFinite(state.selectedPutStrike)) {
+          const pair = adjacentStrangleStrikes(strike);
+          if (pair) state.selectedPutStrike = pair.putStrike;
+        }
+      } else {
+        state.selectedPutStrike = strike;
+        if (!Number.isFinite(state.selectedCallStrike)) {
+          const pair = adjacentStrangleStrikes(strike);
+          if (pair) state.selectedCallStrike = pair.callStrike;
+        }
+      }
+      state.selectedStrike = strike;
+      if (Number.isFinite(state.selectedPutStrike) && Number.isFinite(state.selectedCallStrike)) {
+        markShortStrangleLegs(state.selectedPutStrike, state.selectedCallStrike);
+      }
+    }
+    function markStrikeValue(strike) {
+      const row = document.querySelector(`#nearAtmRows tr[data-strike="${Number(strike)}"]`);
+      return markStrikeRow(row);
+    }
+    function markStrategyChoice(strategy) {
+      document.querySelectorAll(".strat-item .chk").forEach(c => c.classList.remove("on"));
+      const item = document.querySelector(`.strat-item[data-strategy="${strategy}"]`);
+      if (!item) return false;
+      item.querySelector(".chk").classList.add("on");
+      state.strategy = strategy;
+      return true;
+    }
+    function selectStrike(tr) {
+      markStrikeRow(tr);
       renderStrategy();
     }
+    function defaultAtmStrike() {
+      const m = nearAtmModel();
+      const strikes = m.rows.map(([s]) => Number(s)).filter(Number.isFinite);
+      if (!strikes.length) return Number(m.atm);
+      const spot = Number(m.spot);
+      if (Number.isFinite(spot)) {
+        return strikes.reduce((best, k) => Math.abs(k - spot) < Math.abs(best - spot) ? k : best, strikes[0]);
+      }
+      const atm = Number(m.atm);
+      if (Number.isFinite(atm)) {
+        return strikes.reduce((best, k) => Math.abs(k - atm) < Math.abs(best - atm) ? k : best, strikes[0]);
+      }
+      return strikes[0];
+    }
+    function applyDefaultShortStraddle() {
+      if (!state.stratMode || state.defaultStrategyApplied) return false;
+      const atm = defaultAtmStrike();
+      state.selectedStrike = null;
+      state.selectedPutStrike = null;
+      state.selectedCallStrike = null;
+      if (!markStrategyChoice("short_straddle") || !markStrikeValue(atm)) return false;
+      state.defaultStrategyApplied = true;
+      renderStrategy();
+      return true;
+    }
+    function strategyName(type) {
+      return type === "short_strangle" ? "Short Strangle" : "Short Straddle";
+    }
+    function strategyStrikeText(d) {
+      if (!d) return "--";
+      if (d.strategy === "short_strangle" || d.type === "short_strangle") return `${fmt2(d.put_strike)} / ${fmt2(d.call_strike)}`;
+      return fmt2(d.strike);
+    }
+    function adjacentStrangleStrikes(anchor) {
+      const m = nearAtmModel();
+      const strikes = m.rows.map(([s]) => Number(s)).filter(Number.isFinite).sort((a, b) => a - b);
+      const lower = [...strikes].reverse().find(s => s < Number(anchor));
+      const upper = strikes.find(s => s > Number(anchor));
+      if (!Number.isFinite(lower) || !Number.isFinite(upper)) return null;
+      return { putStrike: lower, callStrike: upper };
+    }
     function toggleStrategy(item) {
-      const c = item.querySelector(".chk");
-      c.classList.toggle("on");
-      state.strategy = c.classList.contains("on") ? item.dataset.strategy : null;
+      const wasOn = item.querySelector(".chk").classList.contains("on");
+      document.querySelectorAll(".strat-item .chk").forEach(c => c.classList.remove("on"));
+      if (wasOn) state.strategy = null;
+      else {
+        item.querySelector(".chk").classList.add("on");
+        state.strategy = item.dataset.strategy;
+      }
       renderStrategy();
     }
     function renderStrategy() {
@@ -570,9 +864,9 @@
       const exp = state.nearAtm && state.nearAtm.expiration;
       const sym = (state.nearAtm && state.nearAtm.symbol) || "MU";
       const k = state.selectedStrike;
-      if (state.strategy !== "short_straddle") { state.payoff = null; clearActiveStrategy(); box.innerHTML = ""; renderSummary(null); drawPayoff(null); render(); return; }
+      if (!state.strategy) { state.payoff = null; clearActiveStrategy(); box.innerHTML = ""; renderSummary(null); drawPayoff(null); render(); return; }
       if (!exp || k == null) {
-        box.innerHTML = `<div class="legs-hint">Selecciona una expiración (option chain) y un strike (near atm) para construir el Short Straddle.</div>`;
+        box.innerHTML = `<div class="legs-hint">Selecciona una expiracion y un strike para construir ${strategyName(state.strategy)}.</div>`;
         state.payoff = null;
         clearActiveStrategy();
         renderSummary(null);
@@ -580,33 +874,102 @@
         render();
         return;
       }
-      const legs = [
-        { type: "CALL", symbol: legSymbol(k, "CALL") },
-        { type: "PUT", symbol: legSymbol(k, "PUT") },
-      ];
+
+      let legs, title, payoffArgs;
+      if (state.strategy === "short_strangle") {
+        let pair = null;
+        if (Number.isFinite(state.selectedPutStrike) && Number.isFinite(state.selectedCallStrike)) {
+          pair = { putStrike: state.selectedPutStrike, callStrike: state.selectedCallStrike };
+        } else if (Number.isFinite(state.selectedStrike)) {
+          pair = adjacentStrangleStrikes(state.selectedStrike);
+        }
+        if (!pair) {
+          box.innerHTML = `<div class="legs-hint">Short Strangle necesita un put inferior y un call superior al strike seleccionado.</div>`;
+          state.payoff = null;
+          clearActiveStrategy();
+          renderSummary(null);
+          drawPayoff(null);
+          render();
+          return;
+        }
+        state.selectedPutStrike = pair.putStrike;
+        state.selectedCallStrike = pair.callStrike;
+        markShortStrangleLegs(pair.putStrike, pair.callStrike);
+        legs = [
+          { type: "CALL", strike: pair.callStrike, symbol: legSymbol(pair.callStrike, "CALL") },
+          { type: "PUT", strike: pair.putStrike, symbol: legSymbol(pair.putStrike, "PUT") },
+        ];
+        title = `Short Strangle - ${esc(sym)} ${esc(exp)} @ ${pair.putStrike}/${pair.callStrike}`;
+        payoffArgs = { strategy: "short_strangle", putStrike: pair.putStrike, callStrike: pair.callStrike };
+      } else {
+        legs = [
+          { type: "CALL", strike: k, symbol: legSymbol(k, "CALL") },
+          { type: "PUT", strike: k, symbol: legSymbol(k, "PUT") },
+        ];
+        title = `Short Straddle - ${esc(sym)} ${esc(exp)} @ ${k}`;
+        payoffArgs = { strategy: "short_straddle" };
+      }
+
       const rows = legs.map(leg =>
         `<tr>
-           <td>${esc(leg.symbol || "—")}</td>
-           <td><span class="side-short">SHORT</span></td>
+           <td>${esc(leg.symbol || "-")}</td>
            <td>${esc(exp)}</td>
-           <td>${k}</td>
-           <td>${leg.type}</td>
            <td>-1</td>
+           <td><span class="side-short">SHORT</span></td>
+           <td>${leg.type}</td>
+           <td>${leg.strike}</td>
          </tr>`
       ).join("");
+      state.sendCtx = { expiration: exp, ...payoffArgs, strike: k };
       box.innerHTML =
-        `<div class="legs-title">Short Straddle · ${esc(sym)} ${esc(exp)} @ ${k}</div>
+        `<div class="legs-title">${title}</div>
          <table class="legs-table">
-           <thead><tr><th>symbol</th><th>side</th><th>exp</th><th>strike</th><th>type</th><th>qty</th></tr></thead>
+           <thead><tr><th>symbol</th><th>exp</th><th>qty</th><th>side</th><th>type</th><th>strike</th></tr></thead>
            <tbody>${rows}</tbody>
-         </table>`;
-      loadPayoff(exp, k);  // fetches P&L + Black-Scholes curves, fills the right sidebar + chart
+         </table>
+         <div class="strat-actions">
+           <button class="send-btn" type="button">SEND</button>
+           <span id="sendStatus" class="send-status"></span>
+         </div>`;
+      loadPayoff(exp, k, payoffArgs);
     }
-    async function loadPayoff(expiration, strike) {
+    async function sendToExcel() {
+      const ctx = state.sendCtx;
+      const status = $("sendStatus");
+      if (!ctx) return;
+      if (status) { status.textContent = "enviandoÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦"; status.className = "send-status"; }
+      try {
+        const url = new URL("/api/send-to-excel", location.origin);
+        url.searchParams.set("expiration", ctx.expiration);
+        url.searchParams.set("strategy", ctx.strategy || "short_straddle");
+        if (ctx.strategy === "short_strangle") {
+          url.searchParams.set("put_strike", ctx.putStrike);
+          url.searchParams.set("call_strike", ctx.callStrike);
+        } else if (ctx.strike != null) {
+          url.searchParams.set("strike", ctx.strike);
+        }
+        const res = await fetch(url, { cache: "no-store" });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        const legs = (data.options || []).length;
+        const strategies = (data.strategies || []).length;
+        if (status) { status.textContent = `OK portfolio: ${strategies} strat / ${legs} legs`; status.className = "send-status ok"; }
+      } catch (err) {
+        if (status) { status.textContent = `ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â ${err.message || "error"}`; status.className = "send-status err"; }
+      }
+    }
+    async function loadPayoff(expiration, strike, options = {}) {
       try {
         const url = new URL("/api/payoff", location.origin);
         url.searchParams.set("expiration", expiration);
-        url.searchParams.set("strike", strike);
+        const strategy = options.strategy || state.strategy || "short_straddle";
+        // For short_strangle with explicit strikes, don't send anchor (might not exist in chain)
+        if (strategy !== "short_strangle" || options.putStrike == null || options.callStrike == null) {
+          if (strike != null) url.searchParams.set("strike", strike);
+        }
+        url.searchParams.set("strategy", strategy);
+        if (options.putStrike != null) url.searchParams.set("put_strike", options.putStrike);
+        if (options.callStrike != null) url.searchParams.set("call_strike", options.callStrike);
         url.searchParams.set("ts", Date.now());
         const res = await fetch(url, { cache: "no-store" });
         const data = await res.json();
@@ -623,21 +986,55 @@
         drawPayoff(null);
         render();
       }
-    }
-    function pct(v) { return v == null ? "--" : `${Math.round(v * 100)}%`; }
+    }    function pct(v) { return v == null ? "--" : `${Math.round(v * 100)}%`; }
     function signed2(v) { return v == null ? "--" : `${v >= 0 ? "+" : ""}${fmt2(v)}`; }
-    function greekRow(label, g, cls = "") {
+    function greekRow(label, g, iv, prime = "", dte = "", strike = "", cls = "") {
       if (!g) return "";
-      return `<tr class="${cls}"><td>${label}</td><td>${signed2(g.delta)}</td><td>${signed2(g.gamma)}</td><td>${signed2(g.theta)}</td><td>${signed2(g.vega)}</td><td>${signed2(g.rho)}</td></tr>`;
+      return `<tr class="${cls}"><td>${label}</td><td>${dte}</td><td>${strike}</td><td>${iv}</td><td>${prime}</td><td>${signed2(g.delta)}</td><td>${signed2(g.gamma)}</td><td>${signed2(g.theta)}</td><td>${signed2(g.vega)}</td><td>${signed2(g.rho)}</td></tr>`;
     }
-    function greeksTable(g) {
+
+    function quoteSourceName(src) { return src === "tos_live" ? "TOS live" : "Yahoo snapshot"; }
+    function premiumBox(d) {
+      if (!d) return "";
+      const call = Number(d.call_mid), put = Number(d.put_mid), total = call + put;
+      const source = quoteSourceName(d.premium_source);
+      const callTs = d.call_quote && d.call_quote.timestamp ? ` - ${esc(shortTime(d.call_quote.timestamp))}` : "";
+      return `<div class="premium-box">
+        <div class="premium-title">Primas ${source}${callTs}</div>
+        <div class="label">Call vendida</div><div class="value">${fmt2(call)}</div>
+        <div class="label">Put vendida</div><div class="value">${fmt2(put)}</div>
+        <div class="total label">Total credito</div><div class="total value">${fmt2(total)} x100 = ${fmt2(total * 100)}</div>
+        <div class="source">IV ${quoteSourceName(d.iv_source)} ? Griegas ${quoteSourceName(d.greeks_source)}</div>
+      </div>`;
+    }
+    function greeksTable(d) {
+      const g = d && d.greeks;
       if (!g) return "";
+      const callStrike = d.call_strike != null ? fmt2(d.call_strike) : (d.strike != null ? fmt2(d.strike) : "");
+      const putStrike = d.put_strike != null ? fmt2(d.put_strike) : (d.strike != null ? fmt2(d.strike) : "");
+      const dte = d.dte != null ? fmt0(d.dte) : "";
+      const callPrime = Number(d.call_mid);
+      const putPrime = Number(d.put_mid);
+      const totalPrime = callPrime + putPrime;
       return `<table class="greeks-table">
-        <thead><tr><th>Griegas</th><th>Delta</th><th>Gamma</th><th>Theta/d</th><th>Vega</th><th>Rho</th></tr></thead>
+        <colgroup>
+          <col style="width: 180px" />
+          <col style="width: 50px" />
+          <col style="width: 80px" />
+          <col style="width: 60px" />
+          <col style="width: 90px" />
+          <col style="width: 96px" />
+          <col />
+          <col />
+          <col />
+          <col />
+          <col />
+        </colgroup>
+        <thead><tr><th>Griegas</th><th>DTE</th><th>Strike</th><th>IV</th><th>Prime</th><th>Delta</th><th>Gamma</th><th>Theta/d</th><th>Vega</th><th>Rho</th></tr></thead>
         <tbody>
-          ${greekRow("Short call", g.short_call)}
-          ${greekRow("Short put", g.short_put)}
-          ${greekRow("Neto", g.net, "net")}
+          ${greekRow("SHORT CALL", g.short_call, pct(d.call_iv), fmt2(callPrime), dte, callStrike)}
+          ${greekRow("SHORT PUT", g.short_put, pct(d.put_iv), fmt2(putPrime), dte, putStrike)}
+          ${greekRow(strategyName(d.strategy).toUpperCase(), g.net, pct(d.avg_iv), fmt2(totalPrime), "", "", "net")}
         </tbody>
       </table>`;
     }
@@ -647,21 +1044,20 @@
       if (errMsg) { panel.hidden = false; body.innerHTML = `<div class="sum-foot">${esc(errMsg)}</div>`; return; }
       if (!d) { panel.hidden = true; body.innerHTML = ""; return; }
       body.innerHTML =
-        `<div class="sum-sub">Short Straddle - ${esc(d.symbol)} ${esc(d.expiration)} @ ${d.strike} - DTE ${d.dte}</div>
+        `<div class="sum-sub">${strategyName(d.strategy)} - ${esc(d.symbol)} ${esc(d.expiration)} @ ${strategyStrikeText(d)} - DTE ${d.dte}</div>
          <div class="sum-grid">
-           <div><div class="sum-k">Net credit</div><div class="sum-v pos">$${fmt2(d.net)}</div></div>
-           <div><div class="sum-k">Max profit</div><div class="sum-v pos">$${fmt2(d.max_profit)}</div></div>
+           <div><div class="sum-k">Net credit</div><div class="sum-v pos">${fmtMoney0(d.net)}</div></div>
+           <div><div class="sum-k">Max profit</div><div class="sum-v pos">${fmtMoney0(d.max_profit)}</div></div>
            <div><div class="sum-k">Max loss</div><div class="sum-v neg">&infin;</div></div>
            <div><div class="sum-k">Chance</div><div class="sum-v">--</div></div>
-           <div><div class="sum-k">Breakevens</div><div class="sum-v be">${fmt2(d.be_low)} to ${fmt2(d.be_high)}</div></div>
+           <div><div class="sum-k">Min. BE</div><div class="sum-v be">${fmtBE0(d.be_low)}</div></div>
+           <div><div class="sum-k">Max. BE</div><div class="sum-v be">${fmtBE0(d.be_high)}</div></div>
          </div>
          <div class="sum-foot">
-           <div class="iv-line"><b>IV</b><span class="value">call ${pct(d.call_iv)} / put ${pct(d.put_iv)} / avg ${pct(d.avg_iv)}</span></div>
-           ${greeksTable(d.greeks)}
+           ${greeksTable(d)}
          </div>`;
       panel.hidden = false;
-    }
-    function drawPayoff(d) {
+    }    function drawPayoff(d) {
       const el = $("payoffChart");
       if (!el || !window.Plotly) return;
       if (!d || !Array.isArray(d.x)) {
@@ -669,47 +1065,111 @@
         Plotly.purge("payoffChart");
         return;
       }
-      const K = d.strike, net = d.net, beLow = d.be_low, beHigh = d.be_high;
+      const isStrangle = d.strategy === "short_strangle" || (d.put_strike != null && d.call_strike != null && Number(d.put_strike) !== Number(d.call_strike));
+      const effectiveStrategy = isStrangle ? "short_strangle" : d.strategy;
+      const putK = Number(d.put_strike), callK = Number(d.call_strike);
+      const K = isStrangle ? (putK + callK) / 2 : Number(d.strike);
+      const net = d.net, beLow = d.be_low, beHigh = d.be_high;
       const xMin = d.x[0], xMax = d.x[d.x.length - 1];
+      const liveRows = normalizedRows();
+      const currentSpot = liveRows.length ? liveRows[liveRows.length - 1].spot : null;
       const yExpMin = d.expiry[0], yExpMax = d.expiry[d.expiry.length - 1];
+      const yValues = [...d.expiry, ...d.today, 0, net];
+      const yMinRaw = Math.min(...yValues), yMaxRaw = Math.max(...yValues);
+      const ySpan = Math.max(yMaxRaw - yMinRaw, 1);
+      const yRange = [yMinRaw - ySpan * 0.08, yMaxRaw + ySpan * 0.08];
+      const currentSpotY0 = yRange[0];
+      const greenX = isStrangle ? [beLow, putK, callK, beHigh] : [beLow, K, beHigh];
+      const greenY = isStrangle ? [0, net, net, 0] : [0, net, 0];
 
-      // Expiration line: green profit triangle + red loss wings (built from known vertices).
-      const green = { x: [beLow, K, beHigh], y: [0, net, 0], mode: "lines", name: "vencimiento",
-        line: { color: "#00e676", width: 2.5 }, fill: "tozeroy", fillcolor: "rgba(0,230,118,0.20)", hoverinfo: "skip" };
+      const greenBinCount = 36;
+      const greenBands = isStrangle ? [] : Array.from({ length: greenBinCount }, (_, i) => {
+        const low = i / greenBinCount;
+        const high = (i + 1) / greenBinCount;
+        const xl0 = beLow + (K - beLow) * low;
+        const xl1 = beLow + (K - beLow) * high;
+        const xr1 = beHigh - (beHigh - K) * high;
+        const xr0 = beHigh - (beHigh - K) * low;
+        const centerBoost = Math.sin(high * Math.PI);
+        const alpha = 0.025 + high * 0.15 + centerBoost * 0.028;
+        return {
+          x: [xl0, xl1, xr1, xr0, xl0],
+          y: [net * low, net * high, net * high, net * low, net * low],
+          mode: "lines", showlegend: false,
+          line: { color: "rgba(0,230,118,0)", width: 0 },
+          fill: "toself", fillcolor: `rgba(0,230,118,${alpha.toFixed(3)})`,
+          hoverinfo: "skip"
+        };
+      });
+      const greenFill = { x: greenX, y: greenY, mode: "lines", showlegend: false,
+        line: { color: "rgba(0,230,118,0)", width: 0 }, fill: "tozeroy", fillcolor: "rgba(0,230,118,0.16)", hoverinfo: "skip" };
+      const redLFill = { x: [xMin, beLow], y: [yExpMin, 0], mode: "lines", showlegend: false,
+        line: { color: "rgba(220,70,88,0)", width: 0 }, fill: "tozeroy", fillcolor: "rgba(180,48,66,0.16)", hoverinfo: "skip" };
+      const redRFill = { x: [beHigh, xMax], y: [0, yExpMax], mode: "lines", showlegend: false,
+        line: { color: "rgba(220,70,88,0)", width: 0 }, fill: "tozeroy", fillcolor: "rgba(180,48,66,0.16)", hoverinfo: "skip" };
+      const redLGlow = { x: [xMin, beLow], y: [yExpMin * 0.58, 0], mode: "lines", showlegend: false,
+        line: { color: "rgba(220,70,88,0)", width: 0 }, fill: "tozeroy", fillcolor: "rgba(180,48,66,0.08)", hoverinfo: "skip" };
+      const redRGlow = { x: [beHigh, xMax], y: [0, yExpMax * 0.58], mode: "lines", showlegend: false,
+        line: { color: "rgba(220,70,88,0)", width: 0 }, fill: "tozeroy", fillcolor: "rgba(180,48,66,0.08)", hoverinfo: "skip" };
+      const green = { x: greenX, y: greenY, mode: "lines", name: "vencimiento",
+        line: { color: "#00e676", width: 3 },
+        hovertemplate: "%{x:,.0f}<br>PnL venc. %{y:,.0f}<extra></extra>" };
       const redL = { x: [xMin, beLow], y: [yExpMin, 0], mode: "lines", showlegend: false,
-        line: { color: "#ff3b4f", width: 2.2 }, fill: "tozeroy", fillcolor: "rgba(255,59,79,0.10)", hoverinfo: "skip" };
+        line: { color: "#dc4658", width: 2.35 }, hoverinfo: "skip" };
       const redR = { x: [beHigh, xMax], y: [0, yExpMax], mode: "lines", showlegend: false,
-        line: { color: "#ff3b4f", width: 2.2 }, fill: "tozeroy", fillcolor: "rgba(255,59,79,0.10)", hoverinfo: "skip" };
-      // "Today" line: Black-Scholes with Yahoo IV.
+        line: { color: "#dc4658", width: 2.35 }, hoverinfo: "skip" };
+      const expiryHover = { x: d.x, y: d.expiry, mode: "lines", name: "PnL venc.",
+        line: { color: "rgba(0,230,118,0)", width: 14 },
+        hovertemplate: "%{x:,.0f}<br>PnL venc. %{y:,.0f}<extra></extra>" };
       const today = { x: d.x, y: d.today, mode: "lines", name: "PnL hoy",
         line: { color: "#22d3ee", width: 2.6, dash: "dot" },
-        hovertemplate: "%{x:,.0f}<br>P&L hoy %{y:,.0f}<extra></extra>" };
+        hovertemplate: "%{x:,.0f}<br>PnL hoy %{y:,.0f}<extra></extra>" };
 
       const blue = c => ({ type: "line", xref: "x", yref: "paper", x0: c, x1: c, y0: 0, y1: 1, line: { color: "#22d3ee", width: 1.5 } });
+      const currentSpotShape = Number.isFinite(currentSpot)
+        ? [{ type: "line", xref: "x", yref: "paper", x0: currentSpot, x1: currentSpot, y0: 0, y1: 0.88, line: { color: "#ffffff", width: 1, dash: "dash" } }]
+        : [];
+      const strikeShapes = isStrangle
+        ? [
+            { type: "line", xref: "x", yref: "paper", x0: putK, x1: putK, y0: 0, y1: 0.80, line: { color: "#facc15", width: 1 } },
+            { type: "line", xref: "x", yref: "paper", x0: callK, x1: callK, y0: 0, y1: 0.80, line: { color: "#facc15", width: 1 } },
+          ]
+        : [{ type: "line", xref: "x", yref: "paper", x0: K, x1: K, y0: 0, y1: 0.80, line: { color: "#facc15", width: 1 } }];
+      const strikeAnnotations = isStrangle
+        ? [
+            { x: putK, yref: "paper", y: 0.83, text: `Put ${fmt2(putK)}`, showarrow: false, font: { color: "#facc15", size: 13 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#facc15", borderwidth: 1, borderpad: 4 },
+            { x: callK, yref: "paper", y: 0.83, text: `Call ${fmt2(callK)}`, showarrow: false, font: { color: "#facc15", size: 13 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#facc15", borderwidth: 1, borderpad: 4 },
+          ]
+        : [{ x: K, yref: "paper", y: 0.83, text: `Strike ${fmt2(K)}`, showarrow: false, font: { color: "#facc15", size: 14 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#facc15", borderwidth: 1, borderpad: 4 }];
+      const spotAnnotation = Number.isFinite(currentSpot)
+        ? [{ x: currentSpot, yref: "paper", y: 0.91, text: `Spot ${fmt2(currentSpot)}`, showarrow: false, font: { color: "#ffffff", size: 13 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#ffffff", borderwidth: 1, borderpad: 4 }]
+        : [];
       const layout = {
-        title: { text: `Short Straddle · ${d.symbol} ${d.expiration} @ ${K} (DTE ${d.dte})`, font: { color: "#dbeafe", size: 13 }, x: 0.5 },
+        title: { text: `${strategyName(effectiveStrategy)} - ${d.symbol} ${d.expiration} @ ${strategyStrikeText(d)} - DTE ${d.dte}`, font: { color: "#e5f2ff", size: 16, weight: 800 }, x: 0.5 },
         paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", separators: ".,",
         font: { color: "#cbd5e1", family: "Inter, Arial, sans-serif", size: 11 },
-        margin: { l: 64, r: 20, t: 44, b: 42 }, hovermode: "x",
-        showlegend: true, legend: { x: 0.02, y: 0.98, bgcolor: "rgba(5,8,13,0.6)", font: { size: 10 } },
-        xaxis: { title: { text: "Precio subyacente", font: { size: 10 } }, range: [xMin, xMax], gridcolor: "rgba(148,163,184,0.07)", zeroline: false, tickformat: ",.0f", nticks: 22, color: "#cbd5e1" },
-        yaxis: { title: { text: "P&L ($)", font: { size: 10 } }, gridcolor: "rgba(148,163,184,0.08)", zerolinecolor: "rgba(203,213,225,0.45)", tickformat: ",.0f", color: "#cbd5e1" },
+        margin: { l: 64, r: 20, t: 44, b: 42 }, hovermode: "x unified",
+        showlegend: false,
+        xaxis: { range: [xMin, xMax], showgrid: false, zeroline: false, tickformat: ",.0f", nticks: 22, color: "#cbd5e1", tickfont: { size: 12 } },
+        yaxis: { range: yRange, gridcolor: "rgba(148,163,184,0.08)", zerolinecolor: "rgba(203,213,225,0.45)", tickformat: ",.0f", color: "#cbd5e1" },
         shapes: [
           blue(beLow), blue(beHigh),
-          { type: "line", xref: "x", yref: "paper", x0: K, x1: K, y0: 0, y1: 1, line: { color: "#94a3b8", width: 1, dash: "dot" } },
+          ...currentSpotShape,
+          ...strikeShapes,
           { type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: 0, y1: 0, line: { color: "rgba(203,213,225,0.55)", width: 1 } },
         ],
         annotations: [
-          { x: beLow, yref: "paper", y: 1, text: `BE ${fmt2(beLow)}`, showarrow: false, font: { color: "#22d3ee", size: 14 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#22d3ee", borderwidth: 1, borderpad: 4 },
-          { x: beHigh, yref: "paper", y: 1, text: `BE ${fmt2(beHigh)}`, showarrow: false, font: { color: "#22d3ee", size: 14 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#22d3ee", borderwidth: 1, borderpad: 4 },
-          { x: K, yref: "paper", y: 0.89, text: `Strike ${fmt2(K)}`, showarrow: false, font: { color: "#facc15", size: 14 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#facc15", borderwidth: 1, borderpad: 4 },
-          { x: K, y: net, text: `Max $${fmt2(net)}`, showarrow: false, yshift: 12, font: { color: "#00e676", size: 11 } },
+          { x: beLow, yref: "paper", y: 1, text: `BE ${fmtBE0(beLow)}`, showarrow: false, font: { color: "#22d3ee", size: 14 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#22d3ee", borderwidth: 1, borderpad: 4 },
+          { x: beHigh, yref: "paper", y: 1, text: `BE ${fmtBE0(beHigh)}`, showarrow: false, font: { color: "#22d3ee", size: 14 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#22d3ee", borderwidth: 1, borderpad: 4 },
+          ...strikeAnnotations,
+          ...spotAnnotation,
+          { x: K, y: net, text: `Max ${fmtMoney0(net)}`, showarrow: false, yshift: 12, font: { color: "#00e676", size: 11 } },
         ],
       };
       el.hidden = false;
-      Plotly.react("payoffChart", [redL, redR, green, today], layout, { responsive: true, displayModeBar: false });
-    }
-    function openStratTab() {
+      const fills = isStrangle ? [greenFill] : greenBands;
+      Plotly.react("payoffChart", [redLFill, redRFill, redLGlow, redRGlow, ...fills, redL, redR, green, expiryHover, today], layout, { responsive: true, displayModeBar: false });
+    }    function openStratTab() {
       // Open a new tab (keeping the current one) showing the chain as a left sidebar.
       window.open(`${location.pathname}?strat=1`, "_blank");
     }
@@ -729,11 +1189,11 @@
       return state.rows.map(r => ({
         timestamp: r.timestamp,
         symbol: String(r.underlying_symbol || "MU").toUpperCase(),
-        spot: tosPrice(r.UNDERLYING_BID),
-        bid: tosPrice(r.UNDERLYING_BID),
-        last: tosPrice(r.UNDERLYING_LAST),
-        ask: tosPrice(r.UNDERLYING_ASK),
-        mark: tosPrice(r.UNDERLYING_MARK),
+        spot: tosPrice(r.UNDERLYING_BID, "UNDERLYING_BID"),
+        bid: tosPrice(r.UNDERLYING_BID, "UNDERLYING_BID"),
+        last: tosPrice(r.UNDERLYING_LAST, "UNDERLYING_LAST"),
+        ask: tosPrice(r.UNDERLYING_ASK, "UNDERLYING_ASK"),
+        mark: tosPrice(r.UNDERLYING_MARK, "UNDERLYING_MARK"),
         volume: val(r.UNDERLYING_VOLUME),
       })).filter(r => r.symbol === state.symbol && r.spot != null);
     }
@@ -773,6 +1233,15 @@
       $("sideAsk").textContent = fmt2(last.ask);
       $("sideMark").textContent = fmt2(last.mark);
       $("sideVol").textContent = fmt0(last.volume);
+      if ($("stratSideSpot")) {
+        $("stratSideSpot").textContent = fmt2(last.spot);
+        $("stratSideTime").textContent = shortTime(last.timestamp);
+        $("stratSideSamples").textContent = fmt0(rows.length);
+        $("stratSideBid").textContent = fmt2(last.bid);
+        $("stratSideAsk").textContent = fmt2(last.ask);
+        $("stratSideMark").textContent = fmt2(last.mark);
+        $("stratSideVol").textContent = fmt0(last.volume);
+      }
       $("status").className = "status live";
       $("status").textContent = "CSV live";
       drawChart(rows, last.spot);
@@ -792,30 +1261,37 @@
 
     function strategyPriceLines() {
       const d = state.activeStrategy;
-      if (state.stratMode || !d || d.type !== "short_straddle" || d.symbol !== state.symbol) return { shapes: [], annotations: [], values: [] };
-      const lines = [
-        { key: "be_low", label: "BE", value: Number(d.be_low), color: "#ff3b4f", dash: "dot" },
-        { key: "strike", label: "Strike", value: Number(d.strike), color: "#facc15", dash: "dash" },
-        { key: "be_high", label: "BE", value: Number(d.be_high), color: "#ff3b4f", dash: "dot" },
-      ].filter(line => Number.isFinite(line.value));
+      if (state.stratMode || !d || d.symbol !== state.symbol) return { shapes: [], annotations: [], values: [] };
+      const lines = d.type === "short_strangle"
+        ? [
+            { key: "be_low", label: "BE", value: Number(d.be_low), color: "#ff3b4f", dash: "dot" },
+            { key: "put", label: "Put", value: Number(d.put_strike), color: "#facc15", dash: "dash" },
+            { key: "call", label: "Call", value: Number(d.call_strike), color: "#facc15", dash: "dash" },
+            { key: "be_high", label: "BE", value: Number(d.be_high), color: "#ff3b4f", dash: "dot" },
+          ]
+        : [
+            { key: "be_low", label: "BE", value: Number(d.be_low), color: "#ff3b4f", dash: "dot" },
+            { key: "strike", label: "Strike", value: Number(d.strike), color: "#facc15", dash: "dash" },
+            { key: "be_high", label: "BE", value: Number(d.be_high), color: "#ff3b4f", dash: "dot" },
+          ];
+      const validLines = lines.filter(line => Number.isFinite(line.value));
       return {
-        values: lines.map(line => line.value),
-        shapes: lines.map(line => ({
+        values: validLines.map(line => line.value),
+        shapes: validLines.map(line => ({
           type: "line", xref: "paper", yref: "y", x0: 0, x1: 0.965,
           y0: line.value, y1: line.value,
           line: { color: line.color, width: 1, dash: line.dash }, layer: "above"
         })),
-        annotations: lines.map(line => ({
+        annotations: validLines.map(line => ({
           xref: "paper", yref: "y", x: 0.965, y: line.value,
           xanchor: "left", yanchor: "middle", showarrow: false,
-          text: `${line.label} ${fmt2(line.value)}`,
+          text: `${line.label} ${line.label === "BE" ? fmtBE0(line.value) : fmt2(line.value)}`,
           font: { color: line.color, size: 11, weight: 700 },
           bgcolor: "rgba(11,14,20,0.85)", bordercolor: line.color,
           borderwidth: 1, borderpad: 3
         }))
       };
-    }
-    function drawChart(rows, lastSpot) {
+    }    function drawChart(rows, lastSpot) {
       if (state.stratMode) { Plotly.purge("chart"); return; }
       const x = rows.map(r => r.timestamp);
       const y = rows.map(r => r.spot);
@@ -880,8 +1356,6 @@
 
     async function loadText(text, sourceLabel) {
       state.rows = parseCsv(text);
-      if (sourceLabel) $("fileLabel").textContent = sourceLabel;
-      $("fileLabel").classList.add("active");
       render();
     }
     async function loadFile(file) {
@@ -905,10 +1379,23 @@
     }
     $("chainToggle").addEventListener("click", openStratTab);
     document.addEventListener("click", ev => {
+      if (ev.target.closest(".send-btn")) { sendToExcel(); return; }
       const ocRow = ev.target.closest("#optionChainRows tr");
       if (ocRow) { loadNearAtm(ocRow.dataset.expiration); return; }
       const naRow = ev.target.closest("#nearAtmRows tr");
-      if (naRow && ev.target.closest(".chk")) { selectStrike(naRow); return; }
+      const naChk = ev.target.closest("#nearAtmRows .chk");
+      if (naRow && naChk) {
+        if (state.strategy === "short_strangle") {
+          const checkboxes = Array.from(naRow.querySelectorAll(".chk"));
+          const side = checkboxes.indexOf(naChk) === 0 ? "CALL" : "PUT";
+          selectStrangleLeg(naRow, side);
+          renderStrategy();
+          return;
+        }
+        if (Number(naRow.dataset.strike) === state.selectedStrike && naChk.classList.contains("on")) toggleStrikeCheckSide(naChk);
+        else selectStrike(naRow);
+        return;
+      }
       const item = ev.target.closest(".strat-item");
       if (item) { toggleStrategy(item); return; }
       const box = ev.target.closest(".chk");
@@ -933,3 +1420,4 @@
   </script>
 </body>
 </html>
+

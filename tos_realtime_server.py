@@ -1,4 +1,5 @@
 import csv
+import json
 import time
 from pathlib import Path
 from datetime import datetime
@@ -10,14 +11,17 @@ import win32com.client as win32
 # CONFIGURACION
 # =========================
 
-OPTION_SYMBOL = ".MU260626P1195"   # cambia esto por el simbolo exacto de tu opcion
 UNDERLYING_SYMBOL = "MU"
 INTERVAL_SECONDS = 60              # 60 = guarda una fila cada minuto
+
+# Si no hay active_symbols.json, se usa esto como fallback.
+DEFAULT_OPTION_SYMBOLS = [".MU260626P1195"]
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "RTD_live_excel"
 DATA_DIR = Path(__file__).resolve().parent / "data"
 EXCEL_FILE = OUTPUT_DIR / "tos_live_option.xlsx"
 CSV_FILE = DATA_DIR / "registro_opcion_minuto_a_minuto.csv"
+ACTIVE_SYMBOLS_FILE = OUTPUT_DIR / "active_symbols.json"  # lo escribe el boton SEND del dashboard
 
 FIELDS = [
     "LAST",
@@ -38,12 +42,26 @@ FIELDS = [
 UNDERLYING_FIELDS = ["LAST", "BID", "ASK", "MARK", "VOLUME"]
 UNDERLYING_CSV_FIELDS = [f"UNDERLYING_{field}" for field in UNDERLYING_FIELDS]
 OPTION_HEADER_ROW = 5
-OPTION_VALUE_ROW = 6
+OPTION_FIRST_VALUE_ROW = 6
+MAX_OPTION_ROWS = 80              # portfolio intradia: varias estrategias/patas desde A6
 UNDERLYING_HEADER_ROW = 1
 UNDERLYING_VALUE_ROW = 2
+OPTION_METADATA_FIELDS = [
+    "strategy_id",
+    "strategy",
+    "strategy_label",
+    "expiration",
+    "dte",
+    "strike",
+    "leg_type",
+    "side",
+    "qty",
+    "leg_index",
+]
 CSV_HEADERS = [
     "timestamp",
     "symbol",
+    *OPTION_METADATA_FIELDS,
     "underlying_symbol",
     *UNDERLYING_CSV_FIELDS,
     *FIELDS,
@@ -54,9 +72,7 @@ CSV_HEADERS = [
 
 
 def clean_value(value):
-    """
-    Limpia valores que vienen de Excel/RTD.
-    """
+    """Limpia valores que vienen de Excel/RTD."""
     if value is None:
         return ""
 
@@ -81,6 +97,78 @@ def safe_float(value):
         return None
 
 
+def normalize_leg(option, strategy=None, index=1):
+    symbol = str(option.get("symbol") or "").strip()
+    if not symbol:
+        return None
+    strategy = strategy or {}
+    role = option.get("role") or option.get("type") or option.get("leg_type") or ""
+    return {
+        "symbol": symbol,
+        "strategy_id": option.get("strategy_id") or strategy.get("id") or "manual",
+        "strategy": option.get("strategy") or strategy.get("strategy") or "manual",
+        "strategy_label": option.get("strategy_label") or strategy.get("label") or "Manual",
+        "expiration": option.get("expiration") or strategy.get("expiration") or "",
+        "dte": option.get("dte") if option.get("dte") not in (None, "") else strategy.get("dte", ""),
+        "strike": option.get("strike") if option.get("strike") not in (None, "") else strategy.get("strike", ""),
+        "leg_type": role,
+        "side": option.get("side") or "SHORT",
+        "qty": option.get("qty", -1),
+        "leg_index": option.get("leg_index", index),
+    }
+
+
+def fallback_legs():
+    return [
+        normalize_leg({"symbol": symbol, "leg_index": i}, {"id": "fallback", "strategy": "manual", "label": "Fallback"}, i)
+        for i, symbol in enumerate(DEFAULT_OPTION_SYMBOLS, start=1)
+    ]
+
+
+def load_active_symbols():
+    """Lee active_symbols.json y devuelve patas dinamicas para el portfolio RTD."""
+    try:
+        data = json.loads(ACTIVE_SYMBOLS_FILE.read_text(encoding="utf-8"))
+        legs = []
+        strategies = data.get("strategies") or []
+        if isinstance(strategies, list) and strategies:
+            for strat in strategies:
+                for i, option in enumerate(strat.get("legs", []), start=1):
+                    leg = normalize_leg(option, strat, i)
+                    if leg:
+                        legs.append(leg)
+        else:
+            strategy = {
+                "id": data.get("strategy_id") or data.get("strategy") or "manual",
+                "strategy": data.get("strategy") or "manual",
+                "label": data.get("strategy_label") or data.get("strategy") or "Manual",
+                "expiration": data.get("expiration") or "",
+                "dte": data.get("dte", ""),
+            }
+            for i, option in enumerate(data.get("options", []), start=1):
+                leg = normalize_leg(option, strategy, i)
+                if leg:
+                    legs.append(leg)
+        if legs:
+            return legs[:MAX_OPTION_ROWS]
+    except FileNotFoundError:
+        pass
+    except Exception as exc:
+        print(f"active_symbols.json ilegible ({exc}); uso fallback.")
+    return [leg for leg in fallback_legs() if leg]
+
+
+def legs_signature(legs):
+    return json.dumps([
+        [leg.get("strategy_id"), leg.get("symbol"), leg.get("side"), leg.get("qty")]
+        for leg in legs
+    ], sort_keys=True)
+
+
+def leg_volume_key(leg):
+    return f"{leg.get('strategy_id', '')}|{leg.get('symbol', '')}|{leg.get('leg_index', '')}"
+
+
 def save_workbook_as(excel, wb, path):
     previous_alerts = excel.DisplayAlerts
     excel.DisplayAlerts = False
@@ -90,13 +178,12 @@ def save_workbook_as(excel, wb, path):
         excel.DisplayAlerts = previous_alerts
 
 
-def get_or_create_excel():
+def get_or_create_excel(symbols):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     excel = win32.gencache.EnsureDispatch("Excel.Application")
     excel.Visible = True
 
-    # Intenta acelerar el RTD
     try:
         excel.RTD.ThrottleInterval = 1000
     except Exception:
@@ -112,7 +199,6 @@ def get_or_create_excel():
             open_path = str(Path(open_wb.FullName)).lower()
         except Exception:
             open_path = ""
-
         try:
             open_name = str(open_wb.Name).lower()
         except Exception:
@@ -121,7 +207,6 @@ def get_or_create_excel():
         if open_path == target_path:
             open_target = open_wb
             break
-
         if open_name == target_name:
             open_same_name = open_wb
 
@@ -138,31 +223,44 @@ def get_or_create_excel():
 
     ws = wb.Worksheets(1)
     ws.Name = "LIVE"
-
     ws.Cells.Clear()
 
-    # Subyacente en la parte superior
+    # --- Subyacente (filas 1-2) ---
     ws.Cells(UNDERLYING_HEADER_ROW, 1).Value = "UNDERLYING_SYMBOL"
     ws.Cells(UNDERLYING_VALUE_ROW, 1).Value = UNDERLYING_SYMBOL
-
     for col, field in enumerate(UNDERLYING_FIELDS, start=2):
         ws.Cells(UNDERLYING_HEADER_ROW, col).Value = f"UNDERLYING_{field}"
         ws.Cells(UNDERLYING_VALUE_ROW, col).Formula = f'=RTD("tos.rtd",,"{field}","{UNDERLYING_SYMBOL}")'
 
-    # Opcion debajo del subyacente
+    # --- Opciones (cabecera fila 5; valores dinamicos desde A6) ---
+    # Las formulas referencian $A{row}, asi que basta cambiar la columna A para re-apuntar el RTD.
     ws.Cells(OPTION_HEADER_ROW, 1).Value = "SYMBOL"
-    ws.Cells(OPTION_VALUE_ROW, 1).Value = OPTION_SYMBOL
-
     for col, field in enumerate(FIELDS, start=2):
         ws.Cells(OPTION_HEADER_ROW, col).Value = field
-        ws.Cells(OPTION_VALUE_ROW, col).Formula = f'=RTD("tos.rtd",,"{field}","{OPTION_SYMBOL}")'
+
+    apply_symbols(ws, symbols, build_formulas=True)
 
     wb.Save()
     return excel, wb, ws
 
 
+def apply_symbols(ws, legs, build_formulas=False):
+    """Escribe las patas desde A6 y reconstruye formulas RTD para cada simbolo activo."""
+    last_col = len(FIELDS) + 1
+    for i in range(MAX_OPTION_ROWS):
+        row = OPTION_FIRST_VALUE_ROW + i
+        if i < len(legs):
+            symbol = legs[i].get("symbol", "")
+            ws.Cells(row, 1).Value = symbol
+            if build_formulas:
+                for col, field in enumerate(FIELDS, start=2):
+                    ws.Cells(row, col).Formula = f'=RTD("tos.rtd",,"{field}",$A${row})'
+        else:
+            ws.Range(ws.Cells(row, 1), ws.Cells(row, last_col)).ClearContents()
+
+
 def create_csv_if_needed():
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     if not CSV_FILE.exists():
         with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
@@ -189,20 +287,23 @@ def create_csv_if_needed():
             writer.writerow(row)
 
 
-def read_row_from_excel(ws, previous_volume):
+def read_option_row(ws, value_row, leg, previous_volume):
+    """Lee una fila de opcion y anade metadata de estrategia para filtrar el CSV."""
+    symbol = clean_value(ws.Cells(value_row, 1).Value)
+    if not symbol:
+        return None, previous_volume
+
     row = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "symbol": OPTION_SYMBOL,
+        "symbol": symbol,
         "underlying_symbol": UNDERLYING_SYMBOL,
     }
-
+    for field in OPTION_METADATA_FIELDS:
+        row[field] = leg.get(field, "")
     for col, field in enumerate(UNDERLYING_FIELDS, start=2):
-        value = ws.Cells(UNDERLYING_VALUE_ROW, col).Value
-        row[f"UNDERLYING_{field}"] = clean_value(value)
-
+        row[f"UNDERLYING_{field}"] = clean_value(ws.Cells(UNDERLYING_VALUE_ROW, col).Value)
     for col, field in enumerate(FIELDS, start=2):
-        value = ws.Cells(OPTION_VALUE_ROW, col).Value
-        row[field] = clean_value(value)
+        row[field] = clean_value(ws.Cells(value_row, col).Value)
 
     bid = safe_float(row.get("BID"))
     ask = safe_float(row.get("ASK"))
@@ -234,23 +335,41 @@ def main():
     print("Creando Excel RTD...")
     print(f"Excel live: {EXCEL_FILE}")
     print(f"CSV salida: {CSV_FILE}")
+    print(f"Simbolos:   {ACTIVE_SYMBOLS_FILE} (lo escribe el boton SEND)")
 
-    excel, wb, ws = get_or_create_excel()
+    legs = load_active_symbols()
+    excel, wb, ws = get_or_create_excel(legs)
     create_csv_if_needed()
 
-    previous_volume = None
-
-    print("\nMonitorizando opcion minuto a minuto.")
+    previous_volumes = {}
+    last_signature = legs_signature(legs)
+    print(f"\nMonitorizando {len(legs)} patas:")
+    for leg in legs:
+        print(f"- {leg.get('strategy_label')} | {leg.get('leg_type')} {leg.get('strike')} | {leg.get('symbol')}")
     print("Pulsa CTRL + C para parar.\n")
 
     while True:
         try:
-            row, current_volume = read_row_from_excel(ws, previous_volume)
-            append_to_csv(row)
+            # Aplica nuevos simbolos si el dashboard los cambio (SEND).
+            current = load_active_symbols()
+            current_signature = legs_signature(current)
+            if current_signature != last_signature:
+                apply_symbols(ws, current, build_formulas=True)
+                legs = current
+                last_signature = current_signature
+                previous_volumes = {}
+                print(f"[SEND] portfolio actualizado: {len(legs)} patas")
+                for leg in legs:
+                    print(f"- {leg.get('strategy_label')} | {leg.get('leg_type')} {leg.get('strike')} | {leg.get('symbol')}")
 
-            previous_volume = current_volume
-
-            print(row)
+            for i, leg in enumerate(legs):
+                value_row = OPTION_FIRST_VALUE_ROW + i
+                key = leg_volume_key(leg)
+                row, current_volume = read_option_row(ws, value_row, leg, previous_volumes.get(key))
+                previous_volumes[key] = current_volume
+                if row is not None:
+                    append_to_csv(row)
+                    print(row)
 
             time.sleep(INTERVAL_SECONDS)
 

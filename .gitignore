@@ -13,6 +13,7 @@ logs/*
 /data/*.json
 /RTD_live_excel/*.csv
 /RTD_live_excel/*.xlsx
+/RTD_live_excel/*.json
 /RTD_live_excel/~$*.xlsx
 
 # Generated snapshots

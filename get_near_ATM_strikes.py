@@ -18,6 +18,7 @@ Examples
 
 import argparse
 import json
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -25,7 +26,15 @@ import pandas as pd
 DATA_DIR = Path(__file__).resolve().parent / "data"
 OUTPUTS_DIR = Path(__file__).resolve().parent / "outputs"
 DEFAULT_TICKER = "MU"
-DEFAULT_LEVELS = 12  # strikes on EACH side of the ATM (so 12 below + ATM + 12 above)
+DEFAULT_LEVELS = 25  # strikes on EACH side of the ATM (so 25 below + ATM + 25 above)
+
+
+def dte_from_expiration(expiration: str) -> int | None:
+    try:
+        exp = date.fromisoformat(str(expiration))
+    except ValueError:
+        return None
+    return max(0, (exp - date.today()).days)
 
 
 def latest_chain_csv(ticker: str) -> Path:
@@ -80,6 +89,42 @@ def live_spot(ticker: str) -> float:
     if not price:
         raise RuntimeError(f"yfinance returned no last price for {ticker}")
     return float(price)
+
+
+def nearest_strike_distance(strikes, value: float) -> float:
+    return min(abs(float(k) - value) for k in strikes)
+
+
+def normalize_spot_to_chain(spot: float, chain: pd.DataFrame) -> tuple[float, bool]:
+    """Normalize RTD/Yahoo scale drift by choosing the spot scale closest to listed strikes."""
+    strikes = sorted(float(k) for k in chain["strike"].dropna().unique() if float(k) > 0)
+    if not strikes:
+        return float(spot), False
+
+    base = abs(float(spot))
+    signed = -1.0 if float(spot) < 0 else 1.0
+    candidates = {base}
+    for factor in (10, 100, 1000, 10000):
+        candidates.add(base / factor)
+        candidates.add(base * factor)
+
+    min_s, max_s = strikes[0], strikes[-1]
+    if min_s <= base <= max_s:
+        return signed * base, False
+
+    soft_lo, soft_hi = min_s * 0.5, max_s * 1.5
+    ranked = []
+    for candidate in candidates:
+        if candidate <= 0:
+            continue
+        distance = nearest_strike_distance(strikes, candidate)
+        out_of_range = 0 if soft_lo <= candidate <= soft_hi else 1
+        ranked.append((out_of_range, distance, abs(candidate - base), candidate))
+    if not ranked:
+        return float(spot), False
+
+    normalized = signed * min(ranked)[3]
+    return normalized, abs(normalized - float(spot)) > 1e-9
 
 
 def classify(strike: float, spot: float, atm_strike: float) -> tuple[str, str]:
@@ -174,7 +219,9 @@ def build_payload(ticker=DEFAULT_TICKER, expiration=None, dte=None,
         raise ValueError(f"No rows for {selector} in {csv_path.name}. Available DTEs: {avail}")
 
     exp = chain["expiration"].iloc[0]
-    dte_v = int(chain["dte"].iloc[0])
+    dte_v = dte_from_expiration(exp)
+    if dte_v is None:
+        dte_v = int(chain["dte"].iloc[0])
 
     if spot is not None:
         spot_src = "manual (--spot)"
@@ -186,6 +233,10 @@ def build_payload(ticker=DEFAULT_TICKER, expiration=None, dte=None,
         if pd.isna(spot):
             spot = estimate_spot_from_itm_flag(chain)
             spot_src = "ITM-flag boundary (snapshot)"
+
+    spot, normalized = normalize_spot_to_chain(float(spot), chain)
+    if normalized:
+        spot_src = f"{spot_src}, normalized to option-chain scale"
 
     near, atm_strike = near_atm_strikes(chain, spot, levels)
     spot = float(spot)
@@ -275,3 +326,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
