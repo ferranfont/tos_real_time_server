@@ -1,0 +1,24 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Runtime logs
+logs/*
+!logs/.gitkeep
+*.log
+
+# Live/generated market data
+/data/*.csv
+/data/*.json
+/RTD_live_excel/*.csv
+/RTD_live_excel/*.xlsx
+/RTD_live_excel/~$*.xlsx
+
+# Generated snapshots
+/outputs/near_atm_strikes.json
+
+# Local environment
+.env
+.venv/
+venv/

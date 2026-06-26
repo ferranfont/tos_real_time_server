@@ -1,0 +1,935 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TOS Live Spot</title>
+  <link rel="icon" href="/outputs/tos_live_favicon.png" type="image/png">
+  <script src="https://cdn.plot.ly/plotly-3.3.1.min.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #05080d;
+      --panel: rgba(5, 8, 13, 0.82);
+      --panel2: rgba(11, 14, 20, 0.88);
+      --line: #202938;
+      --grid: #15191f;
+      --text: #dbeafe;
+      --muted: #94a3b8;
+      --cyan: #22d3ee;
+      --cyan2: #0891b2;
+      --green: #00e676;
+      --red: #ff3b4f;
+      --yellow: #ffe600;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body {
+      background:
+        radial-gradient(ellipse 80% 70% at 0% 100%, rgba(8, 145, 178, 0.16), transparent 65%),
+        linear-gradient(180deg, #05080d 0%, #070b10 58%, #091117 100%);
+      color: var(--text);
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+    }
+    .stage { position: fixed; inset: 0; background: transparent; }
+    #chart { position: absolute; inset: 0; width: 100vw; height: 100vh; }
+    .topbar {
+      position: fixed;
+      top: 38px;
+      left: 40px;
+      right: 32px;
+      z-index: 20;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+    .ticker-pills,
+    .mode-pills,
+    .right-tools {
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border: 1px solid #1d2634;
+      background: rgba(5, 8, 13, 0.80);
+      border-radius: 999px;
+      padding: 4px;
+      box-shadow: 0 12px 34px rgba(0,0,0,0.32);
+      backdrop-filter: blur(10px);
+    }
+    .pill, .file-btn, select {
+      height: 26px;
+      border: 0;
+      border-radius: 999px;
+      padding: 0 12px;
+      background: transparent;
+      color: #cbd5e1;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .pill.active, .file-btn.active {
+      background: #dbeafe;
+      color: #0f172a;
+    }
+    .pill:hover, .file-btn:hover { background: rgba(219, 234, 254, 0.12); color: #fff; }
+    .pill.active:hover, .file-btn.active:hover { background: #dbeafe; color: #0f172a; }
+    select { width: 74px; outline: none; appearance: none; text-align: center; }
+    input[type=file] { display: none; }
+    .spot-card {
+      position: fixed;
+      left: 88px;
+      bottom: 58px;
+      z-index: 22;
+      min-width: 310px;
+      border: 1px solid rgba(34, 211, 238, 0.36);
+      background: linear-gradient(180deg, rgba(5,8,13,.86), rgba(5,8,13,.66));
+      border-radius: 14px;
+      padding: 14px 16px 13px;
+      box-shadow: 0 20px 45px rgba(0,0,0,0.36);
+      backdrop-filter: blur(14px);
+    }
+    .spot-k { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+    .spot-symbol { color: #fff; font-weight: 900; margin-right: 7px; }
+    .spot-v {
+      margin-top: 4px;
+      color: var(--cyan);
+      font-size: 44px;
+      line-height: 1;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 20px rgba(34,211,238,.18);
+    }
+    .spot-meta { margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 11px; font-weight: 700; }
+    .chg.pos { color: var(--green); } .chg.neg { color: var(--red); }
+    .chain-visible .side-panel { display: none; }
+    .option-chain-panel {
+      position: fixed;
+      right: 24px;
+      top: 96px;
+      bottom: 78px;
+      z-index: 23;
+      width: 318px;
+      overflow: auto;
+      border: 1px solid rgba(34, 211, 238, 0.28);
+      border-radius: 14px;
+      background: rgba(5, 8, 13, 0.84);
+      box-shadow: 0 22px 46px rgba(0,0,0,0.34);
+      backdrop-filter: blur(14px);
+      padding: 12px 12px 10px;
+      color: #dbeafe;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .chk {
+      display: inline-block;
+      width: 15px; height: 15px;
+      border: 1px solid var(--muted);
+      border-radius: 4px;
+      cursor: pointer;
+      vertical-align: middle;
+      line-height: 13px;
+      text-align: center;
+      margin-left: 6px;
+    }
+    .chk.on { border-color: var(--green); }
+    .chk.on::after { content: "\2713"; color: var(--green); font-weight: 900; }
+    .near-atm-table td:nth-child(2), .near-atm-table th:nth-child(2) { text-align: center; }
+    .chain-table td.chk-cell { text-align: center; }
+    .chain-table td.chk-cell .chk { margin: 0; }
+    /* Strategy panel */
+    .strat-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: #dbeafe;
+    }
+    .strat-item:hover { color: #fff; }
+    .strat-item .chk { margin: 0; }
+    .strat-legs { margin-top: 8px; }
+    .strat-legs .legs-title { color: #fff; font-size: 12px; font-weight: 700; margin: 4px 0 8px; }
+    .strat-legs .legs-hint { color: var(--muted); font-size: 11px; padding: 6px 2px; }
+    .legs-summary { color: #cbd5e1; font-size: 11px; margin-top: 8px; line-height: 1.6; }
+    .legs-summary b { font-weight: 700; }
+    .legs-summary .pos { color: var(--green); }
+    .legs-summary .neg { color: var(--red); }
+    .legs-summary .legs-hint { display: inline; }
+    .legs-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 12px; }
+    .legs-table th { color: var(--muted); font-size: 10px; text-align: left; padding: 4px 10px 6px 0; border-bottom: 1px solid rgba(203,213,225,.36); }
+    .legs-table td { color: #dbeafe; text-align: left; padding: 5px 10px 5px 0; border-bottom: 1px solid rgba(21,25,31,.86); }
+    .side-short { color: var(--red); font-weight: 700; }
+    .side-long { color: var(--green); font-weight: 700; }
+    /* Payoff chart: STRAT top work area, with P&L docked below it. */
+    .payoff-chart {
+      position: fixed;
+      left: 772px;
+      right: 24px;
+      top: 96px;
+      height: 54vh;
+      z-index: 21;
+      border: 1px solid rgba(34, 211, 238, 0.18);
+      border-radius: 14px;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 38%, rgba(0, 230, 118, 0.12), transparent 58%),
+        linear-gradient(180deg, rgba(8, 12, 34, 0.92) 0%, rgba(4, 8, 20, 0.96) 48%, rgba(2, 5, 14, 0.98) 100%);
+    }
+    .payoff-chart[hidden] { display: none; }
+    .strat-mode .stage,
+    .strat-mode #chart,
+    .strat-mode #empty { display: none !important; }
+    /* Strategy P&L summary below the payoff chart. */
+    .strat-mode .side-panel, .strat-mode .mode-pills { display: none; }
+    .summary-panel {
+      position: fixed;
+      left: 772px;
+      right: 24px;
+      top: calc(96px + 54vh + 16px);
+      width: auto;
+      max-height: calc(100vh - 96px - 54vh - 40px);
+      overflow: auto;
+      z-index: 23;
+      border: 1px solid rgba(34, 211, 238, 0.28);
+      border-radius: 14px;
+      background: rgba(5, 8, 13, 0.86);
+      box-shadow: 0 22px 46px rgba(0,0,0,0.34);
+      backdrop-filter: blur(14px);
+      padding: 14px 16px 16px;
+      color: #dbeafe;
+    }
+    .summary-panel[hidden] { display: none; }
+    .sum-sub { color: #fff; font-size: 12px; font-weight: 700; margin: 2px 0 12px; }
+    .sum-grid { display: grid; grid-template-columns: 150px 150px 110px 110px 190px; justify-content: start; gap: 12px 32px; }
+    .sum-k { color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .sum-v { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 3px; }
+    .sum-v.pos { color: var(--green); }
+    .sum-v.neg { color: var(--red); }
+    .sum-v.be { color: var(--cyan); font-size: 15px; grid-column: 1 / -1; }
+    .sum-foot { color: #cbd5e1; font-size: 13px; margin-top: 14px; line-height: 1.65; border-top: 1px solid rgba(203,213,225,.18); padding-top: 10px; }
+    .iv-line { display: grid; grid-template-columns: 44px max-content; gap: 10px; align-items: baseline; }
+    .iv-line b { color: #fff; font-weight: 800; }
+    .iv-line .value { color: var(--cyan); font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums; }
+    .greeks-table { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+    .greeks-table th { color: var(--muted); font-size: 10px; text-align: right; padding: 4px 5px 6px; border-bottom: 1px solid rgba(203,213,225,.25); }
+    .greeks-table th:first-child, .greeks-table td:first-child { text-align: left; color: #fff; }
+    .greeks-table td { color: var(--cyan); text-align: right; padding: 4px 5px; border-bottom: 1px solid rgba(21,25,31,.75); font-weight: 700; }
+    .greeks-table tr.net td { color: var(--green); }
+    .option-chain-panel[hidden] { display: none; }
+    /* STRAT view: option chain docked as a full-height LEFT sidebar */
+    .strat-mode .option-chain-panel {
+      left: 24px;
+      right: auto;
+      top: 96px;
+      bottom: auto;
+      height: 70vh;
+      width: 340px;
+    }
+    /* STRAT view: second panel (near-ATM strikes) to the right of the chain */
+    .strat-mode .near-atm-panel {
+      left: 388px;
+      right: auto;
+      top: 96px;
+      bottom: auto;
+      height: 70vh;
+      width: 360px;
+    }
+    /* STRAT view: strategy panel below the two top panels */
+    .strat-mode .strategy-panel {
+      left: 24px;
+      right: auto;
+      top: calc(96px + 70vh + 16px);
+      bottom: 24px;
+      height: auto;
+      width: 724px;
+    }
+    .chain-table tr.atm td { color: var(--yellow); font-weight: 700; }
+    /* keep the spot card out of the panels: dock it bottom-right (empty area) */
+    .strat-mode .spot-card { display: none; }
+    .chain-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+    .chain-title { color: #fff; font-size: 14px; font-weight: 700; text-transform: lowercase; }
+    .chain-meta { color: var(--muted); font-size: 11px; }
+    .chain-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    .chain-table th { color: var(--muted); font-size: 11px; text-align: right; padding: 5px 4px 7px; border-bottom: 1px solid rgba(203,213,225,.36); }
+    .chain-table th:first-child, .chain-table td:first-child { text-align: left; }
+    .chain-table td { color: #dbeafe; text-align: right; padding: 4px; border-bottom: 1px solid rgba(21,25,31,.86); }
+    .chain-table tr:first-child td { color: var(--cyan); }
+    .chain-table tr:hover td { background: rgba(34, 211, 238, 0.08); }
+    #optionChainRows tr { cursor: pointer; }
+    .side-panel {
+      position: fixed;
+      right: 62px;
+      top: 39vh;
+      z-index: 21;
+      width: 230px;
+      color: #cbd5e1;
+      font-size: 13px;
+      font-weight: 800;
+      pointer-events: none;
+    }
+    .side-title { color: #fff; margin: 0 0 12px; font-size: 13px; text-transform: lowercase; }
+    .side-row { display: grid; grid-template-columns: 1fr auto; gap: 14px; line-height: 1.85; }
+    .side-row .label { color: #fff; opacity: .94; }
+    .side-row .value { color: var(--cyan); font-variant-numeric: tabular-nums; }
+    .side-sep { height: 1px; background: rgba(203,213,225,.45); margin: 14px 0; }
+    .status {
+      position: fixed;
+      right: 28px;
+      bottom: 26px;
+      z-index: 24;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      background: rgba(5,8,13,.78);
+      border: 1px solid #1d2634;
+      border-radius: 999px;
+      padding: 8px 12px;
+      pointer-events: none;
+    }
+    .status.live { color: var(--green); border-color: rgba(0,230,118,.35); }
+    .status.err { color: var(--red); border-color: rgba(255,59,79,.35); }
+    .empty {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      z-index: 10;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+      pointer-events: none;
+    }
+    @media (max-width: 900px) {
+      .topbar { left: 12px; right: 12px; top: 32px; gap: 8px; flex-wrap: wrap; }
+      .side-panel { display: none; }
+      .option-chain-panel { left: 12px; right: 12px; top: 96px; bottom: 120px; width: auto; }
+      .spot-card { left: 18px; right: 18px; bottom: 48px; min-width: 0; }
+      .spot-v { font-size: 38px; }
+    }  </style>
+</head>
+<body>
+  <div class="stage"><div id="chart"></div></div>
+  <div id="empty" class="empty">Conecta el CSV para pintar la linea bid del subyacente.</div>
+
+  <div class="topbar">
+    <div class="ticker-pills" id="tickerPills"><button class="pill active" type="button">MU</button></div>
+    <div class="mode-pills"><button class="pill active" type="button">Spot</button><button class="pill" type="button">UNDERLYING_BID</button></div>
+    <div class="right-tools">
+      <select id="symbolSelect" aria-label="Simbolo"><option>MU</option></select>
+      <label id="fileLabel" class="file-btn" for="csvInput">CSV</label>
+      <button id="chainToggle" class="file-btn" type="button">STRAT</button>
+      <input id="csvInput" type="file" accept=".csv,text/csv">
+    </div>
+  </div>
+
+  <aside class="spot-card">
+    <div class="spot-k"><span class="spot-symbol" id="spotSymbol">MU</span> UNDERLYING_BID</div>
+    <div class="spot-v" id="spotValue">--</div>
+    <div class="spot-meta"><span id="spotTime">sin lectura</span><span id="spotChange" class="chg"></span></div>
+  </aside>
+
+  <aside class="side-panel">
+    <div class="side-title">live tos</div>
+    <div class="side-row"><span class="label">spot</span><span class="value" id="sideSpot">--</span></div>
+    <div class="side-row"><span class="label">last tick</span><span class="value" id="sideTime">--</span></div>
+    <div class="side-row"><span class="label">samples</span><span class="value" id="sideSamples">0</span></div>
+    <div class="side-sep"></div>
+    <div class="side-row"><span class="label">bid</span><span class="value" id="sideBid">--</span></div>
+    <div class="side-row"><span class="label">ask</span><span class="value" id="sideAsk">--</span></div>
+    <div class="side-row"><span class="label">mark</span><span class="value" id="sideMark">--</span></div>
+    <div class="side-row"><span class="label">volume</span><span class="value" id="sideVol">--</span></div>
+  </aside>
+  <div id="status" class="status">esperando CSV</div>
+  <aside id="optionChainPanel" class="option-chain-panel" hidden>
+    <div class="chain-head"><div class="chain-title">option chain</div><div class="chain-meta">MU - expirations</div></div>
+    <table class="chain-table">
+      <thead><tr><th>Expiration</th><th>DTE</th><th>Calls</th><th>Puts</th><th>Total</th><th></th></tr></thead>
+      <tbody id="optionChainRows"></tbody>
+    </table>
+  </aside>
+  <aside id="nearAtmPanel" class="option-chain-panel near-atm-panel" hidden>
+    <div class="chain-head"><div class="chain-title">near atm</div><div class="chain-meta" id="nearAtmMeta">MU</div></div>
+    <table class="chain-table near-atm-table">
+      <thead><tr><th>Call</th><th>Strike</th><th>Put</th></tr></thead>
+      <tbody id="nearAtmRows"></tbody>
+    </table>
+  </aside>
+  <aside id="strategyPanel" class="option-chain-panel strategy-panel" hidden>
+    <div class="chain-head"><div class="chain-title">strategy</div></div>
+    <div class="strat-item" data-strategy="short_straddle"><span class="chk"></span> Short Straddle</div>
+    <div id="strategyLegs" class="strat-legs"></div>
+  </aside>
+  <div id="payoffChart" class="payoff-chart" hidden></div>
+  <aside id="strategySummary" class="summary-panel" hidden>
+    <div class="chain-head"><div class="chain-title">strategy p&l</div></div>
+    <div id="summaryBody"></div>
+  </aside>
+
+  <script>
+    const nf2 = new Intl.NumberFormat("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const nf0 = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 });
+
+    const OPTION_CHAIN = [
+      ["2026-06-26", 1, 352, 324, 676],
+      ["2026-07-02", 7, 265, 247, 512],
+      ["2026-07-10", 15, 245, 224, 469],
+      ["2026-07-17", 22, 232, 188, 420],
+      ["2026-07-24", 29, 233, 223, 456],
+      ["2026-07-31", 36, 219, 198, 417],
+      ["2026-08-21", 57, 231, 204, 435],
+      ["2026-09-18", 85, 233, 194, 427],
+      ["2026-10-16", 113, 188, 147, 335],
+      ["2026-11-20", 148, 234, 190, 424],
+      ["2026-12-18", 176, 240, 203, 443],
+      ["2027-01-15", 204, 236, 214, 450],
+      ["2027-03-19", 267, 235, 219, 454],
+      ["2027-06-17", 357, 241, 210, 451],
+      ["2027-09-17", 449, 216, 189, 405],
+      ["2027-12-17", 540, 224, 209, 433],
+      ["2028-01-21", 575, 222, 213, 435],
+      ["2028-06-16", 722, 215, 212, 427],
+      ["2028-12-15", 904, 234, 221, 455]
+    ];
+    // Near-ATM strikes (from get_near_ATM_strikes.py) — MU 2026-06-26, ATM 1215.
+    const NEAR_ATM = {
+      symbol: "MU",
+      expiration: "2026-06-26",
+      atm: 1215,
+      strikes: [1165,1170,1175,1180,1185,1190,1195,1200,1205,1210,1215,1220,1225,1230,1235,1240,1245,1250,1255,1260,1265],
+      putsMissing: new Set([1215, 1235, 1245, 1265]),
+    };
+    const ACTIVE_STRATEGY_KEY = "tos_live_active_strategy";
+    const state = { rows: [], symbol: "MU", file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, strategy: null, payoff: null, activeStrategy: null };
+    const $ = id => document.getElementById(id);
+
+    function parseCsv(text) {
+      const lines = text.replace(/^\ufeff/, "").split(/\r?\n/).filter(Boolean);
+      if (lines.length < 2) return [];
+      const headers = splitCsvLine(lines[0]).map(v => v.trim());
+      return lines.slice(1).map(line => {
+        const values = splitCsvLine(line);
+        const row = {};
+        headers.forEach((h, i) => row[h] = (values[i] || "").trim());
+        return row;
+      });
+    }
+    function splitCsvLine(line) {
+      const out = []; let cell = ""; let quoted = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i], next = line[i + 1];
+        if (ch === '"') { if (quoted && next === '"') { cell += '"'; i++; } else quoted = !quoted; }
+        else if (ch === "," && !quoted) { out.push(cell); cell = ""; }
+        else cell += ch;
+      }
+      out.push(cell); return out;
+    }
+    function val(v) {
+      if (v == null || v === "") return null;
+      const n = Number(String(v).trim().replace(/%$/, "").replace(/\s/g, ""));
+      return Number.isFinite(n) ? n : null;
+    }
+    function fmt2(v) { return v == null ? "--" : nf2.format(v); }
+    function tosPrice(v) {
+      const n = val(v);
+      if (n == null) return null;
+      if (Math.abs(n) >= 1000000) return n / 1000;
+      if (Math.abs(n) >= 10000) return n / 100;
+      return n;
+    }
+    function fmt0(v) { return v == null ? "--" : nf0.format(v); }
+    function esc(s) { return String(s || "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+    function shortTime(ts) { return String(ts || "--").replace(/^\d{4}-\d{2}-\d{2}\s+/, ""); }
+    function readActiveStrategy() {
+      try {
+        const raw = localStorage.getItem(ACTIVE_STRATEGY_KEY);
+        if (!raw) return null;
+        const d = JSON.parse(raw);
+        const values = [d.strike, d.be_low, d.be_high].map(Number);
+        if (d.type !== "short_straddle" || values.some(v => !Number.isFinite(v))) return null;
+        return { ...d, strike: values[0], be_low: values[1], be_high: values[2] };
+      } catch (_) { return null; }
+    }
+    function saveActiveStrategy(d) {
+      if (!d) return;
+      const payload = {
+        type: "short_straddle",
+        symbol: d.symbol || state.symbol,
+        expiration: d.expiration,
+        strike: Number(d.strike),
+        be_low: Number(d.be_low),
+        be_high: Number(d.be_high),
+        saved_at: Date.now()
+      };
+      if ([payload.strike, payload.be_low, payload.be_high].some(v => !Number.isFinite(v))) return;
+      try { localStorage.setItem(ACTIVE_STRATEGY_KEY, JSON.stringify(payload)); } catch (_) {}
+      state.activeStrategy = payload;
+    }
+    function clearActiveStrategy() {
+      try { localStorage.removeItem(ACTIVE_STRATEGY_KEY); } catch (_) {}
+      state.activeStrategy = null;
+    }
+
+
+    function renderOptionChain() {
+      $("optionChainRows").innerHTML = OPTION_CHAIN.map(([expiration, dte, calls, puts, total]) =>
+        `<tr class="oc-row" data-expiration="${expiration}" data-dte="${dte}"><td>${expiration}</td><td>${dte}</td><td>${nf0.format(calls)}</td><td>${nf0.format(puts)}</td><td>${nf0.format(total)}</td><td class="chk-cell"><span class="chk"></span></td></tr>`
+      ).join("");
+    }
+    function toggleOptionChain() {
+      const panel = $("optionChainPanel");
+      const show = panel.hidden;
+      panel.hidden = !show;
+      document.body.classList.toggle("chain-visible", show);
+      $("chainToggle").classList.toggle("active", show);
+      if (show) renderOptionChain();
+    }
+    function nearAtmModel() {
+      // Prefer the JSON exported by get_near_ATM_strikes.py; fall back to the embedded list.
+      if (state.nearAtm && Array.isArray(state.nearAtm.strikes)) {
+        const d = state.nearAtm;
+        return {
+          symbol: d.symbol, expiration: d.expiration, atm: d.atm,
+          rows: d.strikes.map(s => [s.strike, s.call, s.put]),
+        };
+      }
+      const yy = NEAR_ATM.expiration.slice(2).replace(/-/g, "");  // 260626
+      return {
+        symbol: NEAR_ATM.symbol, expiration: NEAR_ATM.expiration, atm: NEAR_ATM.atm,
+        rows: NEAR_ATM.strikes.map(k => [
+          k, `.${NEAR_ATM.symbol}${yy}C${k}`,
+          NEAR_ATM.putsMissing.has(k) ? null : `.${NEAR_ATM.symbol}${yy}P${k}`,
+        ]),
+      };
+    }
+    function renderNearAtm() {
+      const m = nearAtmModel();
+      const fmtK = k => Number.isInteger(k) ? k : String(k);
+      $("nearAtmRows").innerHTML = m.rows.map(([k, call, put]) =>
+        `<tr class="${k === m.atm ? "atm" : ""}" data-strike="${k}"><td>${esc(call || "—")}</td><td>${fmtK(k)}<span class="chk"></span></td><td>${esc(put || "—")}</td></tr>`
+      ).join("");
+      $("nearAtmMeta").textContent = `${m.symbol} · ${m.expiration} · atm ${fmtK(m.atm)}`;
+    }
+    function markOcRow(expiration) {
+      document.querySelectorAll("#optionChainRows .chk").forEach(c => c.classList.remove("on"));
+      const row = document.querySelector(`#optionChainRows tr[data-expiration="${expiration}"]`);
+      if (row) { const c = row.querySelector(".chk"); if (c) c.classList.add("on"); }
+    }
+    async function loadNearAtm(expiration) {
+      // Ask the server to compute the near-ATM strikes for the chosen expiration.
+      try {
+        const url = new URL("/api/near-atm", location.origin);
+        if (expiration) url.searchParams.set("expiration", expiration);
+        url.searchParams.set("ts", Date.now());
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        state.nearAtm = await res.json();
+        state.selectedStrike = null;  // strike picked for the old expiration no longer applies
+        renderNearAtm();
+        markOcRow(state.nearAtm.expiration);
+        renderStrategy();
+        return;
+      } catch (err) { /* fall back to the static export below */ }
+      try {
+        const res = await fetch(`/outputs/near_atm_strikes.json?ts=${Date.now()}`, { cache: "no-store" });
+        if (res.ok) { state.nearAtm = await res.json(); renderNearAtm(); markOcRow(state.nearAtm.expiration); }
+      } catch (err) { /* keep embedded fallback */ }
+    }
+    function legSymbol(strike, type) {
+      if (state.nearAtm && Array.isArray(state.nearAtm.strikes)) {
+        const e = state.nearAtm.strikes.find(s => Number(s.strike) === Number(strike));
+        if (e) return type === "CALL" ? e.call : e.put;
+      }
+      return null;
+    }
+    function selectStrike(tr) {
+      document.querySelectorAll("#nearAtmRows .chk").forEach(c => c.classList.remove("on"));
+      const c = tr.querySelector(".chk"); if (c) c.classList.add("on");
+      state.selectedStrike = Number(tr.dataset.strike);
+      renderStrategy();
+    }
+    function toggleStrategy(item) {
+      const c = item.querySelector(".chk");
+      c.classList.toggle("on");
+      state.strategy = c.classList.contains("on") ? item.dataset.strategy : null;
+      renderStrategy();
+    }
+    function renderStrategy() {
+      const box = $("strategyLegs");
+      const exp = state.nearAtm && state.nearAtm.expiration;
+      const sym = (state.nearAtm && state.nearAtm.symbol) || "MU";
+      const k = state.selectedStrike;
+      if (state.strategy !== "short_straddle") { state.payoff = null; clearActiveStrategy(); box.innerHTML = ""; renderSummary(null); drawPayoff(null); render(); return; }
+      if (!exp || k == null) {
+        box.innerHTML = `<div class="legs-hint">Selecciona una expiración (option chain) y un strike (near atm) para construir el Short Straddle.</div>`;
+        state.payoff = null;
+        clearActiveStrategy();
+        renderSummary(null);
+        drawPayoff(null);
+        render();
+        return;
+      }
+      const legs = [
+        { type: "CALL", symbol: legSymbol(k, "CALL") },
+        { type: "PUT", symbol: legSymbol(k, "PUT") },
+      ];
+      const rows = legs.map(leg =>
+        `<tr>
+           <td>${esc(leg.symbol || "—")}</td>
+           <td><span class="side-short">SHORT</span></td>
+           <td>${esc(exp)}</td>
+           <td>${k}</td>
+           <td>${leg.type}</td>
+           <td>-1</td>
+         </tr>`
+      ).join("");
+      box.innerHTML =
+        `<div class="legs-title">Short Straddle · ${esc(sym)} ${esc(exp)} @ ${k}</div>
+         <table class="legs-table">
+           <thead><tr><th>symbol</th><th>side</th><th>exp</th><th>strike</th><th>type</th><th>qty</th></tr></thead>
+           <tbody>${rows}</tbody>
+         </table>`;
+      loadPayoff(exp, k);  // fetches P&L + Black-Scholes curves, fills the right sidebar + chart
+    }
+    async function loadPayoff(expiration, strike) {
+      try {
+        const url = new URL("/api/payoff", location.origin);
+        url.searchParams.set("expiration", expiration);
+        url.searchParams.set("strike", strike);
+        url.searchParams.set("ts", Date.now());
+        const res = await fetch(url, { cache: "no-store" });
+        const data = await res.json();
+        if (data.error) { state.payoff = null; clearActiveStrategy(); renderSummary(null, data.error); drawPayoff(null); render(); return; }
+        state.payoff = data;
+        saveActiveStrategy(data);
+        renderSummary(data);
+        drawPayoff(data);
+        render();
+      } catch (err) {
+        state.payoff = null;
+        clearActiveStrategy();
+        renderSummary(null, "Error al calcular el payoff.");
+        drawPayoff(null);
+        render();
+      }
+    }
+    function pct(v) { return v == null ? "--" : `${Math.round(v * 100)}%`; }
+    function signed2(v) { return v == null ? "--" : `${v >= 0 ? "+" : ""}${fmt2(v)}`; }
+    function greekRow(label, g, cls = "") {
+      if (!g) return "";
+      return `<tr class="${cls}"><td>${label}</td><td>${signed2(g.delta)}</td><td>${signed2(g.gamma)}</td><td>${signed2(g.theta)}</td><td>${signed2(g.vega)}</td><td>${signed2(g.rho)}</td></tr>`;
+    }
+    function greeksTable(g) {
+      if (!g) return "";
+      return `<table class="greeks-table">
+        <thead><tr><th>Griegas</th><th>Delta</th><th>Gamma</th><th>Theta/d</th><th>Vega</th><th>Rho</th></tr></thead>
+        <tbody>
+          ${greekRow("Short call", g.short_call)}
+          ${greekRow("Short put", g.short_put)}
+          ${greekRow("Neto", g.net, "net")}
+        </tbody>
+      </table>`;
+    }
+    function renderSummary(d, errMsg) {
+      const panel = $("strategySummary"), body = $("summaryBody");
+      if (!panel) return;
+      if (errMsg) { panel.hidden = false; body.innerHTML = `<div class="sum-foot">${esc(errMsg)}</div>`; return; }
+      if (!d) { panel.hidden = true; body.innerHTML = ""; return; }
+      body.innerHTML =
+        `<div class="sum-sub">Short Straddle - ${esc(d.symbol)} ${esc(d.expiration)} @ ${d.strike} - DTE ${d.dte}</div>
+         <div class="sum-grid">
+           <div><div class="sum-k">Net credit</div><div class="sum-v pos">$${fmt2(d.net)}</div></div>
+           <div><div class="sum-k">Max profit</div><div class="sum-v pos">$${fmt2(d.max_profit)}</div></div>
+           <div><div class="sum-k">Max loss</div><div class="sum-v neg">&infin;</div></div>
+           <div><div class="sum-k">Chance</div><div class="sum-v">--</div></div>
+           <div><div class="sum-k">Breakevens</div><div class="sum-v be">${fmt2(d.be_low)} to ${fmt2(d.be_high)}</div></div>
+         </div>
+         <div class="sum-foot">
+           <div class="iv-line"><b>IV</b><span class="value">call ${pct(d.call_iv)} / put ${pct(d.put_iv)} / avg ${pct(d.avg_iv)}</span></div>
+           ${greeksTable(d.greeks)}
+         </div>`;
+      panel.hidden = false;
+    }
+    function drawPayoff(d) {
+      const el = $("payoffChart");
+      if (!el || !window.Plotly) return;
+      if (!d || !Array.isArray(d.x)) {
+        el.hidden = true;
+        Plotly.purge("payoffChart");
+        return;
+      }
+      const K = d.strike, net = d.net, beLow = d.be_low, beHigh = d.be_high;
+      const xMin = d.x[0], xMax = d.x[d.x.length - 1];
+      const yExpMin = d.expiry[0], yExpMax = d.expiry[d.expiry.length - 1];
+
+      // Expiration line: green profit triangle + red loss wings (built from known vertices).
+      const green = { x: [beLow, K, beHigh], y: [0, net, 0], mode: "lines", name: "vencimiento",
+        line: { color: "#00e676", width: 2.5 }, fill: "tozeroy", fillcolor: "rgba(0,230,118,0.20)", hoverinfo: "skip" };
+      const redL = { x: [xMin, beLow], y: [yExpMin, 0], mode: "lines", showlegend: false,
+        line: { color: "#ff3b4f", width: 2.2 }, fill: "tozeroy", fillcolor: "rgba(255,59,79,0.10)", hoverinfo: "skip" };
+      const redR = { x: [beHigh, xMax], y: [0, yExpMax], mode: "lines", showlegend: false,
+        line: { color: "#ff3b4f", width: 2.2 }, fill: "tozeroy", fillcolor: "rgba(255,59,79,0.10)", hoverinfo: "skip" };
+      // "Today" line: Black-Scholes with Yahoo IV.
+      const today = { x: d.x, y: d.today, mode: "lines", name: "PnL hoy",
+        line: { color: "#22d3ee", width: 2.6, dash: "dot" },
+        hovertemplate: "%{x:,.0f}<br>P&L hoy %{y:,.0f}<extra></extra>" };
+
+      const blue = c => ({ type: "line", xref: "x", yref: "paper", x0: c, x1: c, y0: 0, y1: 1, line: { color: "#22d3ee", width: 1.5 } });
+      const layout = {
+        title: { text: `Short Straddle · ${d.symbol} ${d.expiration} @ ${K} (DTE ${d.dte})`, font: { color: "#dbeafe", size: 13 }, x: 0.5 },
+        paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", separators: ".,",
+        font: { color: "#cbd5e1", family: "Inter, Arial, sans-serif", size: 11 },
+        margin: { l: 64, r: 20, t: 44, b: 42 }, hovermode: "x",
+        showlegend: true, legend: { x: 0.02, y: 0.98, bgcolor: "rgba(5,8,13,0.6)", font: { size: 10 } },
+        xaxis: { title: { text: "Precio subyacente", font: { size: 10 } }, range: [xMin, xMax], gridcolor: "rgba(148,163,184,0.07)", zeroline: false, tickformat: ",.0f", nticks: 22, color: "#cbd5e1" },
+        yaxis: { title: { text: "P&L ($)", font: { size: 10 } }, gridcolor: "rgba(148,163,184,0.08)", zerolinecolor: "rgba(203,213,225,0.45)", tickformat: ",.0f", color: "#cbd5e1" },
+        shapes: [
+          blue(beLow), blue(beHigh),
+          { type: "line", xref: "x", yref: "paper", x0: K, x1: K, y0: 0, y1: 1, line: { color: "#94a3b8", width: 1, dash: "dot" } },
+          { type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: 0, y1: 0, line: { color: "rgba(203,213,225,0.55)", width: 1 } },
+        ],
+        annotations: [
+          { x: beLow, yref: "paper", y: 1, text: `BE ${fmt2(beLow)}`, showarrow: false, font: { color: "#22d3ee", size: 14 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#22d3ee", borderwidth: 1, borderpad: 4 },
+          { x: beHigh, yref: "paper", y: 1, text: `BE ${fmt2(beHigh)}`, showarrow: false, font: { color: "#22d3ee", size: 14 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#22d3ee", borderwidth: 1, borderpad: 4 },
+          { x: K, yref: "paper", y: 0.89, text: `Strike ${fmt2(K)}`, showarrow: false, font: { color: "#facc15", size: 14 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#facc15", borderwidth: 1, borderpad: 4 },
+          { x: K, y: net, text: `Max $${fmt2(net)}`, showarrow: false, yshift: 12, font: { color: "#00e676", size: 11 } },
+        ],
+      };
+      el.hidden = false;
+      Plotly.react("payoffChart", [redL, redR, green, today], layout, { responsive: true, displayModeBar: false });
+    }
+    function openStratTab() {
+      // Open a new tab (keeping the current one) showing the chain as a left sidebar.
+      window.open(`${location.pathname}?strat=1`, "_blank");
+    }
+    function initStratMode() {
+      if (!new URLSearchParams(location.search).has("strat")) return;
+      state.stratMode = true;
+      document.body.classList.add("strat-mode");
+      $("optionChainPanel").hidden = false;
+      $("nearAtmPanel").hidden = false;
+      $("strategyPanel").hidden = false;
+      $("chainToggle").classList.add("active");
+      renderOptionChain();
+      renderNearAtm();
+      loadNearAtm();
+    }
+    function normalizedRows() {
+      return state.rows.map(r => ({
+        timestamp: r.timestamp,
+        symbol: String(r.underlying_symbol || "MU").toUpperCase(),
+        spot: tosPrice(r.UNDERLYING_BID),
+        bid: tosPrice(r.UNDERLYING_BID),
+        last: tosPrice(r.UNDERLYING_LAST),
+        ask: tosPrice(r.UNDERLYING_ASK),
+        mark: tosPrice(r.UNDERLYING_MARK),
+        volume: val(r.UNDERLYING_VOLUME),
+      })).filter(r => r.symbol === state.symbol && r.spot != null);
+    }
+
+    function updateSymbols() {
+      const symbols = [...new Set(state.rows.map(r => String(r.underlying_symbol || "").toUpperCase()).filter(Boolean))].sort();
+      if (!symbols.includes(state.symbol) && symbols.length) state.symbol = symbols[0];
+      const usable = symbols.length ? symbols : [state.symbol];
+      $("symbolSelect").innerHTML = usable.map(s => `<option value="${esc(s)}" ${s === state.symbol ? "selected" : ""}>${esc(s)}</option>`).join("");
+      $("tickerPills").innerHTML = usable.map(s => `<button class="pill ${s === state.symbol ? "active" : ""}" type="button" data-symbol="${esc(s)}">${esc(s)}</button>`).join("");
+      document.querySelectorAll("[data-symbol]").forEach(btn => btn.onclick = () => { state.symbol = btn.dataset.symbol; render(); });
+    }
+
+    function render() {
+      if (!state.stratMode) state.activeStrategy = readActiveStrategy();
+      updateSymbols();
+      const rows = normalizedRows();
+      const last = rows[rows.length - 1], prev = rows[rows.length - 2];
+      $("spotSymbol").textContent = state.symbol;
+      if (!rows.length) {
+        $("empty").style.display = "grid";
+        Plotly.purge("chart");
+        $("status").className = "status";
+        $("status").textContent = (state.file || state.httpMode) ? "sin UNDERLYING_BID" : "esperando CSV";
+        return;
+      }
+      $("empty").style.display = "none";
+      const diff = prev ? last.spot - prev.spot : null;
+      $("spotValue").textContent = fmt2(last.spot);
+      $("spotTime").textContent = `last tick ${shortTime(last.timestamp)}`;
+      $("spotChange").textContent = diff == null ? "" : `${diff >= 0 ? "+" : ""}${fmt2(diff)}`;
+      $("spotChange").className = `chg ${diff == null ? "" : diff >= 0 ? "pos" : "neg"}`.trim();
+      $("sideSpot").textContent = fmt2(last.spot);
+      $("sideTime").textContent = shortTime(last.timestamp);
+      $("sideSamples").textContent = fmt0(rows.length);
+      $("sideBid").textContent = fmt2(last.bid);
+      $("sideAsk").textContent = fmt2(last.ask);
+      $("sideMark").textContent = fmt2(last.mark);
+      $("sideVol").textContent = fmt0(last.volume);
+      $("status").className = "status live";
+      $("status").textContent = "CSV live";
+      drawChart(rows, last.spot);
+    }
+
+
+    function paddedTimeRange(xValues) {
+      if (!xValues.length) return undefined;
+      const times = xValues.map(v => new Date(v).getTime()).filter(Number.isFinite);
+      if (!times.length) return undefined;
+      const min = Math.min(...times);
+      const max = Math.max(...times);
+      const span = Math.max(max - min, 60_000);
+      const rightPad = Math.max(span * 0.09, 4 * 60_000);
+      return [new Date(min), new Date(max + rightPad)];
+    }
+
+    function strategyPriceLines() {
+      const d = state.activeStrategy;
+      if (state.stratMode || !d || d.type !== "short_straddle" || d.symbol !== state.symbol) return { shapes: [], annotations: [], values: [] };
+      const lines = [
+        { key: "be_low", label: "BE", value: Number(d.be_low), color: "#ff3b4f", dash: "dot" },
+        { key: "strike", label: "Strike", value: Number(d.strike), color: "#facc15", dash: "dash" },
+        { key: "be_high", label: "BE", value: Number(d.be_high), color: "#ff3b4f", dash: "dot" },
+      ].filter(line => Number.isFinite(line.value));
+      return {
+        values: lines.map(line => line.value),
+        shapes: lines.map(line => ({
+          type: "line", xref: "paper", yref: "y", x0: 0, x1: 0.965,
+          y0: line.value, y1: line.value,
+          line: { color: line.color, width: 1, dash: line.dash }, layer: "above"
+        })),
+        annotations: lines.map(line => ({
+          xref: "paper", yref: "y", x: 0.965, y: line.value,
+          xanchor: "left", yanchor: "middle", showarrow: false,
+          text: `${line.label} ${fmt2(line.value)}`,
+          font: { color: line.color, size: 11, weight: 700 },
+          bgcolor: "rgba(11,14,20,0.85)", bordercolor: line.color,
+          borderwidth: 1, borderpad: 3
+        }))
+      };
+    }
+    function drawChart(rows, lastSpot) {
+      if (state.stratMode) { Plotly.purge("chart"); return; }
+      const x = rows.map(r => r.timestamp);
+      const y = rows.map(r => r.spot);
+      const xRange = paddedTimeRange(x);
+      const strategyLines = strategyPriceLines();
+      const yAll = [...y, ...strategyLines.values];
+      const ymin = Math.min(...yAll), ymax = Math.max(...yAll), span = Math.max(ymax - ymin, 0.01);
+      const trace = {
+        x, y, type: "scatter", mode: "lines", name: state.symbol,
+        line: { color: "#22d3ee", width: 3 },
+        hovertemplate: "%{x}<br>Bid: %{y:,.2f}<extra></extra>"
+      };
+      const layout = {
+        uirevision: `${state.symbol}-manual-zoom`,
+        paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", separators: ",.",
+        font: { color: "#cbd5e1", family: "Inter, Arial, sans-serif", size: 11 },
+        margin: { l: state.stratMode ? 380 : 54, r: 330, t: 76, b: 38 }, showlegend: false, hovermode: "closest", dragmode: "pan",
+        xaxis: { range: xRange, showgrid: false, color: "#dbeafe", linecolor: "#263244", tickfont: { color: "#dbeafe", size: 10 }, zeroline: false },
+        yaxis: { range: [ymin - span * 0.18, ymax + span * 0.22], showgrid: true, gridcolor: "#15191f", linecolor: "#2a3140", color: "#cbd5e1", zeroline: false, tickformat: ",.2f" },
+        shapes: [
+          { type: "line", xref: "paper", yref: "y", x0: 0, x1: 0.965, y0: lastSpot, y1: lastSpot, line: { color: "#22d3ee", width: 1 }, layer: "above" },
+          ...strategyLines.shapes
+        ],
+        annotations: [
+          { xref: "paper", yref: "y", x: 0.965, y: lastSpot, xanchor: "left", yanchor: "middle", text: `Bid ${fmt2(lastSpot)}`, showarrow: false, font: { color: "#22d3ee", size: 11, weight: 700 }, bgcolor: "rgba(11,14,20,0.85)", bordercolor: "#22d3ee", borderwidth: 1, borderpad: 3 },
+          ...strategyLines.annotations
+        ]
+      };
+      if (state.userRange) {
+        if (state.userRange.xaxis) layout.xaxis.range = state.userRange.xaxis;
+        if (state.userRange.yaxis) layout.yaxis.range = state.userRange.yaxis;
+      }
+      state.applyingLayout = true;
+      Plotly.react("chart", [trace], layout, { responsive: true, displaylogo: false, scrollZoom: true, modeBarButtonsToRemove: ["lasso2d", "select2d"] })
+        .then(() => { state.applyingLayout = false; bindPlotlyRangeEvents(); })
+        .catch(() => { state.applyingLayout = false; });
+    }
+
+    function bindPlotlyRangeEvents() {
+      const chart = $("chart");
+      if (!chart || chart.__tosRangeBound || !chart.on) return;
+      chart.__tosRangeBound = true;
+      chart.on("plotly_relayout", ev => {
+        if (state.applyingLayout || !ev) return;
+        if (ev["xaxis.autorange"] || ev["yaxis.autorange"]) {
+          state.userRange = null;
+          return;
+        }
+        const nextRange = state.userRange ? { ...state.userRange } : {};
+        if (ev["xaxis.range[0]"] !== undefined && ev["xaxis.range[1]"] !== undefined) {
+          nextRange.xaxis = [ev["xaxis.range[0]"], ev["xaxis.range[1]"]];
+        }
+        if (ev["xaxis.range"] !== undefined) nextRange.xaxis = ev["xaxis.range"];
+        if (ev["yaxis.range[0]"] !== undefined && ev["yaxis.range[1]"] !== undefined) {
+          nextRange.yaxis = [ev["yaxis.range[0]"], ev["yaxis.range[1]"]];
+        }
+        if (ev["yaxis.range"] !== undefined) nextRange.yaxis = ev["yaxis.range"];
+        state.userRange = Object.keys(nextRange).length ? nextRange : null;
+      });
+      chart.on("plotly_doubleclick", () => { state.userRange = null; });
+    }
+
+    async function loadText(text, sourceLabel) {
+      state.rows = parseCsv(text);
+      if (sourceLabel) $("fileLabel").textContent = sourceLabel;
+      $("fileLabel").classList.add("active");
+      render();
+    }
+    async function loadFile(file) {
+      if (!file) return;
+      state.file = file;
+      await loadText(await file.text(), "CSV");
+    }
+    async function loadHttpCsv() {
+      const res = await fetch(`/api/tos-live-csv?ts=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await loadText(await res.text(), "HTTP CSV");
+    }
+    async function refreshFile() {
+      try {
+        if (state.httpMode) await loadHttpCsv();
+        else if (state.file) await loadFile(state.file);
+      } catch (err) {
+        $("status").className = "status err";
+        $("status").textContent = "error CSV";
+      }
+    }
+    $("chainToggle").addEventListener("click", openStratTab);
+    document.addEventListener("click", ev => {
+      const ocRow = ev.target.closest("#optionChainRows tr");
+      if (ocRow) { loadNearAtm(ocRow.dataset.expiration); return; }
+      const naRow = ev.target.closest("#nearAtmRows tr");
+      if (naRow && ev.target.closest(".chk")) { selectStrike(naRow); return; }
+      const item = ev.target.closest(".strat-item");
+      if (item) { toggleStrategy(item); return; }
+      const box = ev.target.closest(".chk");
+      if (box) box.classList.toggle("on");
+    });
+    $("csvInput").addEventListener("change", ev => {
+      state.httpMode = false;
+      loadFile(ev.target.files && ev.target.files[0]);
+      if (state.timer) clearInterval(state.timer);
+      state.timer = setInterval(refreshFile, 5000);
+    });
+    $("symbolSelect").addEventListener("change", ev => { state.symbol = ev.target.value; render(); });
+    window.addEventListener("resize", () => { if (state.rows.length) render(); });
+    window.addEventListener("storage", ev => {
+      if (ev.key === ACTIVE_STRATEGY_KEY && !state.stratMode && state.rows.length) render();
+    });
+    initStratMode();
+    if (state.httpMode) {
+      refreshFile();
+      state.timer = setInterval(refreshFile, 5000);
+    }
+  </script>
+</body>
+</html>
