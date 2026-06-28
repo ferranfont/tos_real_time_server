@@ -1,6 +1,7 @@
 import csv
 import json
-from datetime import datetime
+import re
+from datetime import date, datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -9,10 +10,46 @@ from get_near_ATM_strikes import build_payload, DEFAULT_LEVELS
 from utils.black_scholes import bs_price, bs_greeks, DEFAULT_RATE
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-TOS_CSV = PROJECT_ROOT / "data" / "registro_opcion_minuto_a_minuto.csv"
+DATA_DIR = PROJECT_ROOT / "data"
+LIVE_DATA_DIR = DATA_DIR / "live"
+CSV_FILE_NAME = "registro_opcion_minuto_a_minuto.csv"
+LEGACY_TOS_CSV = DATA_DIR / CSV_FILE_NAME
 ACTIVE_SYMBOLS_FILE = PROJECT_ROOT / "RTD_live_excel" / "active_symbols.json"
 HOST = "127.0.0.1"
 PORT = 8898
+
+def safe_symbol_token(symbol):
+    token = "".join(ch if ch.isalnum() else "_" for ch in str(symbol or "").upper()).strip("_")
+    return token or "UNKNOWN"
+
+
+def option_underlying_symbol(symbol):
+    match = re.match(r"^\.?([A-Z]+)\d{6}[CP]", str(symbol or "").strip().upper())
+    return match.group(1) if match else None
+
+
+def live_csv_file(ticker="MU", day=None):
+    day = day or date.today()
+    if isinstance(day, datetime):
+        day = day.date()
+    if isinstance(day, str):
+        date_text = day
+    else:
+        date_text = day.isoformat()
+    return LIVE_DATA_DIR / f"{safe_symbol_token(ticker)}_{date_text}_{CSV_FILE_NAME}"
+
+
+def latest_live_csv(ticker="MU"):
+    today_file = live_csv_file(ticker)
+    if today_file.exists():
+        return today_file
+    pattern = f"{safe_symbol_token(ticker)}_*_{CSV_FILE_NAME}"
+    files = sorted(LIVE_DATA_DIR.glob(pattern), key=lambda p: (p.name, p.stat().st_mtime)) if LIVE_DATA_DIR.exists() else []
+    if files:
+        return files[-1]
+    if LEGACY_TOS_CSV.exists():
+        return LEGACY_TOS_CSV
+    return today_file
 
 
 def parse_live_price(value, field=None):
@@ -37,10 +74,11 @@ def parse_live_price(value, field=None):
 
 def latest_live_underlying_bid(ticker="MU"):
     """Read the latest live UNDERLYING_BID from the collector CSV."""
-    if not TOS_CSV.exists():
-        raise ValueError(f"CSV live no existe: {TOS_CSV}")
+    csv_path = latest_live_csv(ticker)
+    if not csv_path.exists():
+        raise ValueError(f"CSV live no existe: {csv_path}")
 
-    with open(TOS_CSV, newline="", encoding="utf-8") as f:
+    with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f, skipinitialspace=True))
 
     for row in reversed(rows):
@@ -52,7 +90,7 @@ def latest_live_underlying_bid(ticker="MU"):
             if price is not None and price > 0:
                 return price
 
-    raise ValueError(f"No hay UNDERLYING_BID valido en {TOS_CSV}")
+    raise ValueError(f"No hay UNDERLYING_BID valido en {csv_path}")
 
 
 def parse_option_price(value, field=None):
@@ -129,10 +167,13 @@ def scale_short_live_greeks(quote, fallback, mult):
 
 def latest_live_option_quote(symbol):
     """Return latest normalized live quote for one option symbol from the collector CSV."""
-    if not symbol or not TOS_CSV.exists():
+    if not symbol:
+        return None
+    csv_path = latest_live_csv(option_underlying_symbol(symbol) or "MU")
+    if not csv_path.exists():
         return None
     wanted = str(symbol).strip().upper()
-    with open(TOS_CSV, newline="", encoding="utf-8") as f:
+    with open(csv_path, newline="", encoding="utf-8") as f:
         for row in reversed(list(csv.DictReader(f, skipinitialspace=True))):
             if str(row.get("symbol") or "").strip().upper() != wanted:
                 continue
@@ -290,7 +331,7 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/api/tos-live-csv":
-            self.serve_tos_csv()
+            self.serve_tos_csv(parse_qs(parsed.query))
             return
         if parsed.path == "/api/near-atm":
             self.serve_near_atm(parse_qs(parsed.query))
@@ -300,6 +341,15 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
             return
         if parsed.path == "/api/send-to-excel":
             self.serve_send(parse_qs(parsed.query))
+            return
+        if parsed.path == "/api/premium-series":
+            self.serve_premium(parse_qs(parsed.query))
+            return
+        if parsed.path == "/api/live-sessions":
+            self.serve_sessions(parse_qs(parsed.query))
+            return
+        if parsed.path == "/api/live-strikes":
+            self.serve_strikes(parse_qs(parsed.query))
             return
         if parsed.path in ("/", ""):
             self.path = "/outputs/tos_live_underlying.html"
@@ -401,11 +451,27 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
             strike = call_strike if call_mid is None else put_strike
             self._send_json({"error": f"Sin prima live/Yahoo para la {missing} de {strike:g}."})
             return
-        premium_source = "tos_live" if (call_quote or {}).get("source", "").startswith("tos_live") and (put_quote or {}).get("source", "").startswith("tos_live") else "yahoo_snapshot"
+
+        call_is_live = (call_quote or {}).get("source", "").startswith("tos_live")
+        put_is_live = (put_quote or {}).get("source", "").startswith("tos_live")
+        premium_source = "tos_live" if call_is_live and put_is_live else "yahoo_snapshot"
+        dte_v = payload["dte"]
+        if dte_v == 0 and premium_source != "tos_live":
+            missing_symbols = []
+            if not call_is_live:
+                missing_symbols.append(call_entry.get("call") or f"CALL {call_strike:g}")
+            if not put_is_live:
+                missing_symbols.append(put_entry.get("put") or f"PUT {put_strike:g}")
+            self._send_json({
+                "error": "Esperando TOS live para " + ", ".join(missing_symbols) + ". Pulsa SEND y espera el siguiente tick del collector; no uso Yahoo para 0DTE.",
+                "premium_source": premium_source,
+                "call_quote": call_quote,
+                "put_quote": put_quote,
+            })
+            return
 
         mult = 100 * contracts
         credit = call_mid + put_mid
-        dte_v = payload["dte"]
         T = max(dte_v, 0) / 365.0
         today_T = max(dte_v, 1) / 365.0
         greeks_T = today_T
@@ -562,6 +628,130 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
         ACTIVE_SYMBOLS_FILE.write_text(json.dumps(active, indent=2), encoding="utf-8")
         self._send_json({"ok": True, "path": str(ACTIVE_SYMBOLS_FILE), "added": record, **active})
 
+    def serve_premium(self, query):
+        """Intraday evolution of the option premium (LAST) for one strike, from the live CSV.
+
+        Returns CALL and PUT time series (timestamp + normalized LAST) so the dashboard
+        can chart how the premium moved during the session.
+        """
+        def first(key):
+            vals = query.get(key)
+            return vals[0] if vals else None
+
+        ticker = first("ticker") or "MU"
+        day = first("date")
+        try:
+            target = float(first("strike"))
+        except (TypeError, ValueError):
+            self._send_json({"error": "Falta strike valido."})
+            return
+
+        csv_path = live_csv_file(ticker, day) if day else latest_live_csv(ticker)
+        if not csv_path.exists():
+            self._send_json({"error": f"No hay CSV de sesion para {day or 'la ultima sesion'}."})
+            return
+
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            rows = list(csv.reader(f))
+        if len(rows) < 2:
+            self._send_json({"error": "CSV de sesion vacio."})
+            return
+
+        header = [h.strip() for h in rows[0]]
+        idx = {name: i for i, name in enumerate(header)}
+
+        def cell(row, name):
+            i = idx.get(name)
+            return row[i].strip() if i is not None and i < len(row) else ""
+
+        series = {"CALL": {"t": [], "last": []}, "PUT": {"t": [], "last": []}}
+        under = {}  # timestamp -> underlying bid (one per timestamp, shared by both legs)
+        for row in rows[1:]:
+            if not row:
+                continue
+            ts = cell(row, "timestamp")
+            if ts and ts not in under:
+                ub = parse_live_price(cell(row, "UNDERLYING_BID"), "UNDERLYING_BID")
+                if ub:
+                    under[ts] = round(ub, 4)
+            try:
+                if float(cell(row, "strike")) != target:
+                    continue
+            except ValueError:
+                continue
+            last = parse_live_price(cell(row, "LAST"), "LAST")
+            if last is None:
+                continue
+            # Legacy data: the collector stripped decimal commas, inflating option LAST by 100
+            # (e.g. 54,60 -> 5460). Near-ATM premiums never reach 1000, so this safely de-scales.
+            if abs(last) >= 1000:
+                last /= 100.0
+            leg = cell(row, "leg_type").upper()
+            if leg in series:
+                series[leg]["t"].append(ts)
+                series[leg]["last"].append(round(last, 4))
+
+        self._send_json({
+            "strike": target,
+            "source": csv_path.name,
+            "date": day or "",
+            "call": series["CALL"],
+            "put": series["PUT"],
+            "underlying": {"t": list(under.keys()), "bid": list(under.values())},
+        })
+
+    def serve_sessions(self, query):
+        """List available session days (one live CSV per day)."""
+        ticker = (query.get("ticker") or ["MU"])[0]
+        token = safe_symbol_token(ticker)
+        days = set()
+        if LIVE_DATA_DIR.exists():
+            for f in LIVE_DATA_DIR.glob(f"{token}_*_{CSV_FILE_NAME}"):
+                m = re.search(r"(\d{4}-\d{2}-\d{2})", f.name)
+                if m:
+                    days.add(m.group(1))
+        days = sorted(days)
+        self._send_json({"days": days, "latest": days[-1] if days else None})
+
+    def serve_strikes(self, query):
+        """List the strikes present in a session day's live CSV."""
+        ticker = (query.get("ticker") or ["MU"])[0]
+        day = (query.get("date") or [None])[0]
+        csv_path = live_csv_file(ticker, day) if day else latest_live_csv(ticker)
+        if not csv_path.exists():
+            self._send_json({"date": day or "", "strikes": [], "error": "Sin CSV para esa sesion."})
+            return
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            rows = list(csv.reader(f))
+        if len(rows) < 2:
+            self._send_json({"date": day or "", "source": csv_path.name, "strikes": []})
+            return
+        header = [h.strip() for h in rows[0]]
+        idx = {name: i for i, name in enumerate(header)}
+        si = idx.get("strike")
+        ubi = idx.get("UNDERLYING_BID")
+        strikes = set()
+        underlying = None
+        for row in rows[1:]:
+            if si is not None and si < len(row):
+                try:
+                    strikes.add(float(row[si].strip()))
+                except ValueError:
+                    pass
+            if ubi is not None and ubi < len(row):
+                val = parse_live_price(row[ubi].strip(), "UNDERLYING_BID")
+                if val:
+                    underlying = val  # keep the most recent valid underlying bid
+        out = [int(s) if s.is_integer() else s for s in sorted(strikes)]
+        atm = min(out, key=lambda s: abs(s - underlying)) if out and underlying else None
+        self._send_json({
+            "date": day or "",
+            "source": csv_path.name,
+            "strikes": out,
+            "underlying": round(underlying, 2) if underlying else None,
+            "atm": atm,
+        })
+
     def _send_json(self, obj):
         body = json.dumps(obj).encode("utf-8")
         self.send_response(200)
@@ -570,11 +760,14 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def serve_tos_csv(self):
-        if not TOS_CSV.exists():
-            self.send_error(404, f"CSV not found: {TOS_CSV}")
+    def serve_tos_csv(self, query=None):
+        query = query or {}
+        ticker = (query.get("ticker") or [None])[0] or read_active_book().get("underlying") or "MU"
+        csv_path = latest_live_csv(ticker)
+        if not csv_path.exists():
+            self.send_error(404, f"CSV not found: {csv_path}")
             return
-        data = TOS_CSV.read_bytes()
+        data = csv_path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", "text/csv; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))

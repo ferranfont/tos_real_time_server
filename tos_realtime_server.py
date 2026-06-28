@@ -1,5 +1,6 @@
 import csv
 import json
+import re
 import time
 from pathlib import Path
 from datetime import datetime
@@ -19,8 +20,9 @@ DEFAULT_OPTION_SYMBOLS = [".MU260626P1195"]
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "RTD_live_excel"
 DATA_DIR = Path(__file__).resolve().parent / "data"
+LIVE_DATA_DIR = DATA_DIR / "live"
+CSV_FILE_NAME = "registro_opcion_minuto_a_minuto.csv"
 EXCEL_FILE = OUTPUT_DIR / "tos_live_option.xlsx"
-CSV_FILE = DATA_DIR / "registro_opcion_minuto_a_minuto.csv"
 ACTIVE_SYMBOLS_FILE = OUTPUT_DIR / "active_symbols.json"  # lo escribe el boton SEND del dashboard
 
 FIELDS = [
@@ -71,6 +73,20 @@ CSV_HEADERS = [
 ]
 
 
+def safe_symbol_token(symbol):
+    token = "".join(ch if ch.isalnum() else "_" for ch in str(symbol or "").upper()).strip("_")
+    return token or "UNKNOWN"
+
+
+def option_underlying_symbol(symbol):
+    match = re.match(r"^\.?([A-Z]+)\d{6}[CP]", str(symbol or "").strip().upper())
+    return match.group(1) if match else None
+
+
+def live_csv_file(symbol=UNDERLYING_SYMBOL, now=None):
+    now = now or datetime.now()
+    return LIVE_DATA_DIR / f"{safe_symbol_token(symbol)}_{now:%Y-%m-%d}_{CSV_FILE_NAME}"
+
 def clean_value(value):
     """Limpia valores que vienen de Excel/RTD."""
     if value is None:
@@ -115,6 +131,10 @@ def normalize_leg(option, strategy=None, index=1):
         "side": option.get("side") or "SHORT",
         "qty": option.get("qty", -1),
         "leg_index": option.get("leg_index", index),
+        "underlying_symbol": option.get("underlying_symbol")
+        or strategy.get("underlying")
+        or option_underlying_symbol(symbol)
+        or UNDERLYING_SYMBOL,
     }
 
 
@@ -259,16 +279,16 @@ def apply_symbols(ws, legs, build_formulas=False):
             ws.Range(ws.Cells(row, 1), ws.Cells(row, last_col)).ClearContents()
 
 
-def create_csv_if_needed():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+def create_csv_if_needed(csv_file):
+    csv_file.parent.mkdir(parents=True, exist_ok=True)
 
-    if not CSV_FILE.exists():
-        with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
+    if not csv_file.exists():
+        with open(csv_file, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
             writer.writeheader()
         return
 
-    with open(CSV_FILE, "r", newline="", encoding="utf-8") as f:
+    with open(csv_file, "r", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f, skipinitialspace=True)
         if reader.fieldnames is None:
             rows = []
@@ -280,7 +300,7 @@ def create_csv_if_needed():
     if existing_headers == CSV_HEADERS:
         return
 
-    with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
+    with open(csv_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_HEADERS, extrasaction="ignore")
         writer.writeheader()
         for row in rows:
@@ -296,7 +316,7 @@ def read_option_row(ws, value_row, leg, previous_volume):
     row = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "symbol": symbol,
-        "underlying_symbol": UNDERLYING_SYMBOL,
+        "underlying_symbol": leg.get("underlying_symbol") or option_underlying_symbol(symbol) or UNDERLYING_SYMBOL,
     }
     for field in OPTION_METADATA_FIELDS:
         row[field] = leg.get(field, "")
@@ -324,8 +344,8 @@ def read_option_row(ws, value_row, leg, previous_volume):
     return row, volume
 
 
-def append_to_csv(row):
-    with open(CSV_FILE, "a", newline="", encoding="utf-8") as f:
+def append_to_csv(row, csv_file):
+    with open(csv_file, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_HEADERS, extrasaction="ignore")
         writer.writerow(row)
 
@@ -334,12 +354,14 @@ def main():
     print("Abre thinkorswim y deja la plataforma conectada.")
     print("Creando Excel RTD...")
     print(f"Excel live: {EXCEL_FILE}")
-    print(f"CSV salida: {CSV_FILE}")
+    csv_file = live_csv_file()
+    print(f"CSV salida: {csv_file}")
     print(f"Simbolos:   {ACTIVE_SYMBOLS_FILE} (lo escribe el boton SEND)")
 
     legs = load_active_symbols()
     excel, wb, ws = get_or_create_excel(legs)
-    create_csv_if_needed()
+    create_csv_if_needed(csv_file)
+    csv_files_ready = {csv_file}
 
     previous_volumes = {}
     last_signature = legs_signature(legs)
@@ -350,6 +372,14 @@ def main():
 
     while True:
         try:
+            next_csv_file = live_csv_file()
+            if next_csv_file != csv_file:
+                csv_file = next_csv_file
+                create_csv_if_needed(csv_file)
+                csv_files_ready = {csv_file}
+                previous_volumes = {}
+                print(f"[CSV] nuevo archivo diario: {csv_file}")
+
             # Aplica nuevos simbolos si el dashboard los cambio (SEND).
             current = load_active_symbols()
             current_signature = legs_signature(current)
@@ -368,7 +398,12 @@ def main():
                 row, current_volume = read_option_row(ws, value_row, leg, previous_volumes.get(key))
                 previous_volumes[key] = current_volume
                 if row is not None:
-                    append_to_csv(row)
+                    row_csv_file = live_csv_file(row.get("underlying_symbol") or UNDERLYING_SYMBOL)
+                    if row_csv_file not in csv_files_ready:
+                        create_csv_if_needed(row_csv_file)
+                        csv_files_ready.add(row_csv_file)
+                        print(f"[CSV] archivo activo: {row_csv_file}")
+                    append_to_csv(row, row_csv_file)
                     print(row)
 
             time.sleep(INTERVAL_SECONDS)
@@ -385,3 +420,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

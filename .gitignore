@@ -10,6 +10,8 @@ logs/*
 
 # Live/generated market data
 /data/*.csv
+/data/live/*.csv
+!/data/live/.gitkeep
 /data/*.json
 /RTD_live_excel/*.csv
 /RTD_live_excel/*.xlsx

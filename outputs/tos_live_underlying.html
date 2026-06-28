@@ -88,10 +88,12 @@
     input[type=file] { display: none; }
     .spot-card {
       position: fixed;
-      left: 88px;
+      left: auto;
+      right: 24px;
       bottom: 58px;
       z-index: 22;
-      min-width: 310px;
+      width: 230px;
+      min-width: 230px;
       border: 1px solid rgba(34, 211, 238, 0.36);
       background: linear-gradient(180deg, rgba(5,8,13,.86), rgba(5,8,13,.66));
       border-radius: 14px;
@@ -104,7 +106,7 @@
     .spot-v {
       margin-top: 4px;
       color: var(--cyan);
-      font-size: 44px;
+      font-size: 38px;
       line-height: 1;
       font-weight: 900;
       font-variant-numeric: tabular-nums;
@@ -342,7 +344,7 @@
     #optionChainRows tr { cursor: pointer; }
     .side-panel {
       position: fixed;
-      right: 62px;
+      right: 24px;
       top: 39vh;
       z-index: 21;
       width: 230px;
@@ -350,6 +352,13 @@
       font-size: 13px;
       font-weight: 800;
       pointer-events: none;
+      padding: 18px 18px 16px;
+      border: 1px solid rgba(34, 211, 238, 0.30);
+      border-radius: 14px;
+      background: rgba(5, 8, 13, 0.82);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.34);
+      backdrop-filter: blur(12px);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.85);
     }
     .side-title { color: #fff; margin: 0 0 12px; font-size: 13px; text-transform: lowercase; }
     .side-row { display: grid; grid-template-columns: 1fr auto; gap: 14px; line-height: 1.85; }
@@ -376,12 +385,52 @@
       backdrop-filter: blur(12px);
       text-shadow: 0 1px 2px rgba(0,0,0,0.85);
       display: none;
-      align-content: center;
+      align-content: start;
     }
     .strat-mode .strat-live-panel { display: grid; }
+    /* Premium (LAST) intraday evolution panel, center-right under the Live panel. */
+    .premium-panel {
+      position: fixed;
+      right: 24px;
+      top: 96px;
+      z-index: 24;
+      display: flex;
+      gap: 8px;
+    }
+    .premium-panel[hidden] { display: none; }
+    .strat-mode .premium-panel { display: none; }   /* premium overlay lives on the Spot page */
+    .ul-toggle {
+      position: fixed;
+      right: 24px;
+      top: calc(39vh - 44px);
+      bottom: auto;
+      z-index: 25;
+      width: 230px;
+      height: 30px;
+      border: 1px solid rgba(34,211,238,.42);
+      background: rgba(5,8,13,.82);
+      color: #e0f7ff;
+      border-radius: 8px;
+      padding: 0 12px;
+      font: inherit; font-size: 12px; font-weight: 800;
+      cursor: pointer; letter-spacing: .03em;
+    }
+    .ul-toggle:hover { border-color: var(--green); background: rgba(0,230,118,.15); color: #fff; }
+    .ul-toggle.off { border-color: rgba(255,59,79,.5); color: #ffd9de; }
+    .ul-toggle[hidden] { display: none; }
+    .strat-mode .ul-toggle { display: none; }
+    .pct-toggle { top: calc(39vh - 82px); bottom: auto; }
+    .pct-toggle.on { border-color: var(--green); background: rgba(0,230,118,.18); color: #fff; }
+    .premium-select {
+      height: 28px; width: 120px;
+      background: rgba(5,8,13,.78); color: #dbeafe;
+      border: 1px solid #1d2634; border-radius: 8px;
+      font: inherit; font-size: 12px; font-weight: 700; padding: 0 8px;
+      appearance: none; cursor: pointer; text-align: center;
+    }
     .status {
       position: fixed;
-      right: 28px;
+      right: 24px;
       bottom: 26px;
       z-index: 24;
       color: var(--muted);
@@ -412,9 +461,10 @@
       .topbar { left: 12px; right: 12px; top: 32px; gap: 8px; flex-wrap: wrap; }
       .side-panel { display: none; }
       .option-chain-panel { left: 12px; right: 12px; top: 96px; bottom: 120px; width: auto; }
-      .spot-card { left: 18px; right: 18px; bottom: 48px; min-width: 0; }
+      .spot-card { left: 18px; right: 18px; bottom: 48px; width: auto; min-width: 0; }
       .spot-v { font-size: 38px; }
-    }  </style>
+    }
+  </style>
 </head>
 <body>
   <div class="stage"><div id="chart"></div></div>
@@ -458,11 +508,13 @@
     <div class="side-row"><span class="label">mark</span><span class="value" id="stratSideMark">--</span></div>
     <div class="side-row"><span class="label">volume</span><span class="value" id="stratSideVol">--</span></div>
   </aside>
+  <button id="togglePct" class="ul-toggle pct-toggle" type="button" hidden>Primas %</button>
+  <button id="toggleUnderlying" class="ul-toggle" type="button" hidden>Ocultar subyacente</button>
   <a id="status" class="status" href="/api/tos-live-csv" target="_blank" rel="noopener">esperando CSV</a>
   <aside id="optionChainPanel" class="option-chain-panel" hidden>
     <div class="chain-head"><div class="chain-title">Option Chain</div><div class="chain-meta">MU</div></div>
     <table class="chain-table">
-      <thead><tr><th>Expiration</th><th>DTE</th><th>Calls</th><th>Puts</th><th>Total</th><th></th></tr></thead>
+      <thead><tr><th>Expiration</th><th>DTE</th><th>Calls</th><th>Puts</th><th></th></tr></thead>
       <tbody id="optionChainRows"></tbody>
     </table>
   </aside>
@@ -484,6 +536,10 @@
     <div id="strategyLegs" class="strat-legs"></div>
   </aside>
   <div id="payoffChart" class="payoff-chart" hidden></div>
+  <div id="premiumPanel" class="premium-panel" hidden>
+    <select id="premiumDay" class="premium-select" title="Sesion"></select>
+    <select id="premiumStrike" class="premium-select" title="Strike"></select>
+  </div>
   <aside id="strategySummary" class="summary-panel" hidden>
     <div id="summaryBody"></div>
   </aside>
@@ -513,7 +569,7 @@
       ["2028-06-16", 722, 215, 212, 427],
       ["2028-12-15", 904, 234, 221, 455]
     ];
-    // Near-ATM strikes (from get_near_ATM_strikes.py) ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â MU 2026-06-26, ATM 1215, DTE 0, 51 strikes
+    // Near-ATM strikes from get_near_ATM_strikes.py.
     const NEAR_ATM = {
       symbol: "MU",
       expiration: "2026-06-26",
@@ -522,7 +578,7 @@
       putsMissing: new Set([1215, 1235, 1245, 1265, 1275, 1285, 1295, 1305, 1315, 1325]),
     };
     const ACTIVE_STRATEGY_KEY = "tos_live_active_strategy";
-    const state = { rows: [], symbol: "MU", file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null };
+    const state = { rows: [], symbol: "MU", file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null, payoffLoading: false, lastPayoffRefreshKey: null, premium: null, premiumPast: false, premiumDay: null, latestDay: null, hideUnderlying: false, premiumPct: false };
     const $ = id => document.getElementById(id);
 
     function parseCsv(text) {
@@ -635,8 +691,8 @@
 
 
     function renderOptionChain() {
-      $("optionChainRows").innerHTML = OPTION_CHAIN.map(([expiration, dte, calls, puts, total]) =>
-        `<tr class="oc-row" data-expiration="${expiration}" data-dte="${dteByDate(expiration) ?? dte}"><td>${expiration}</td><td>${dteByDate(expiration) ?? dte}</td><td>${nf0.format(calls)}</td><td>${nf0.format(puts)}</td><td>${nf0.format(total)}</td><td class="chk-cell"><span class="chk"></span></td></tr>`
+      $("optionChainRows").innerHTML = OPTION_CHAIN.map(([expiration, dte, calls, puts]) =>
+        `<tr class="oc-row" data-expiration="${expiration}" data-dte="${dteByDate(expiration) ?? dte}"><td>${expiration}</td><td>${dteByDate(expiration) ?? dte}</td><td>${nf0.format(calls)}</td><td>${nf0.format(puts)}</td><td class="chk-cell"><span class="chk"></span></td></tr>`
       ).join("");
     }
     function toggleOptionChain() {
@@ -808,6 +864,59 @@
       markStrikeRow(tr);
       renderStrategy();
     }
+    async function initPremiumControls() {
+      try {
+        const s = await (await fetch(`/api/live-sessions?ts=${Date.now()}`, { cache: "no-store" })).json();
+        const days = s.days || [];
+        const daySel = $("premiumDay");
+        state.latestDay = s.latest || days[days.length - 1] || null;
+        daySel.innerHTML = days.map(d => `<option value="${d}">${d}</option>`).join("");
+        daySel.value = state.latestDay || "";
+        await loadPremiumStrikes(daySel.value);
+      } catch (err) { setPremium(null); }
+    }
+    async function loadPremiumStrikes(day) {
+      const strikeSel = $("premiumStrike");
+      try {
+        const url = new URL("/api/live-strikes", location.origin);
+        if (day) url.searchParams.set("date", day);
+        url.searchParams.set("ts", Date.now());
+        const r = await (await fetch(url, { cache: "no-store" })).json();
+        const strikes = r.strikes || [];
+        strikeSel.innerHTML = strikes.map(k => `<option value="${k}">${k}</option>`).join("");
+        if (strikes.length) {
+          // default: ATM (closest to the session underlying), fallback to highest
+          strikeSel.value = (r.atm != null ? r.atm : strikes[strikes.length - 1]);
+          loadPremiumSeries(strikeSel.value, day);
+        } else {
+          setPremium(null);
+        }
+      } catch (err) { setPremium(null); }
+    }
+    async function loadPremiumSeries(strike, day) {
+      state.premiumDay = day || null;
+      const past = !!(day && state.latestDay && day !== state.latestDay);
+      try {
+        const url = new URL("/api/premium-series", location.origin);
+        url.searchParams.set("strike", strike);
+        if (day) url.searchParams.set("date", day);
+        url.searchParams.set("ts", Date.now());
+        const res = await fetch(url, { cache: "no-store" });
+        const data = await res.json();
+        if (data.error) { setPremium(null, past); return; }
+        state.userRange = null;   // new session/strike: fit the whole view
+        setPremium(data, past);
+      } catch (err) { setPremium(null, past); }
+    }
+    function setPremium(d, past) {
+      // Premium (LAST) + session underlying are overlaid on the main chart (right Y axis).
+      const hasCall = d && d.call && Array.isArray(d.call.t) && d.call.t.length;
+      const hasPut = d && d.put && Array.isArray(d.put.t) && d.put.t.length;
+      state.premium = (hasCall || hasPut) ? d : null;
+      // A past day shows that day's own underlying; today keeps the live underlying line.
+      state.premiumPast = !!(past && d && d.underlying && d.underlying.t && d.underlying.t.length);
+      if (!state.stratMode) render();
+    }
     function defaultAtmStrike() {
       const m = nearAtmModel();
       const strikes = m.rows.map(([s]) => Number(s)).filter(Number.isFinite);
@@ -921,6 +1030,7 @@
          </tr>`
       ).join("");
       state.sendCtx = { expiration: exp, ...payoffArgs, strike: k };
+      state.lastPayoffRefreshKey = null;
       box.innerHTML =
         `<div class="legs-title">${title}</div>
          <table class="legs-table">
@@ -937,7 +1047,7 @@
       const ctx = state.sendCtx;
       const status = $("sendStatus");
       if (!ctx) return;
-      if (status) { status.textContent = "enviandoÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦"; status.className = "send-status"; }
+      if (status) { status.textContent = "enviando..."; status.className = "send-status"; }
       try {
         const url = new URL("/api/send-to-excel", location.origin);
         url.searchParams.set("expiration", ctx.expiration);
@@ -955,10 +1065,12 @@
         const strategies = (data.strategies || []).length;
         if (status) { status.textContent = `OK portfolio: ${strategies} strat / ${legs} legs`; status.className = "send-status ok"; }
       } catch (err) {
-        if (status) { status.textContent = `ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â ${err.message || "error"}`; status.className = "send-status err"; }
+        if (status) { status.textContent = `ERROR ${err.message || "error"}`; status.className = "send-status err"; }
       }
     }
     async function loadPayoff(expiration, strike, options = {}) {
+      if (state.payoffLoading) return;
+      state.payoffLoading = true;
       try {
         const url = new URL("/api/payoff", location.origin);
         url.searchParams.set("expiration", expiration);
@@ -985,8 +1097,23 @@
         renderSummary(null, "Error al calcular el payoff.");
         drawPayoff(null);
         render();
+      } finally {
+        state.payoffLoading = false;
       }
-    }    function pct(v) { return v == null ? "--" : `${Math.round(v * 100)}%`; }
+    }
+    function csvRefreshKey() {
+      const last = state.rows.length ? state.rows[state.rows.length - 1] : null;
+      return last ? `${state.rows.length}|${last.timestamp || ""}|${last.symbol || ""}` : "empty";
+    }
+    function maybeRefreshPayoffFromCsv() {
+      if (!state.stratMode || !state.sendCtx || state.payoffLoading) return;
+      const ctx = state.sendCtx;
+      const key = `${ctx.expiration}|${ctx.strategy}|${ctx.strike}|${ctx.putStrike || ""}|${ctx.callStrike || ""}|${csvRefreshKey()}`;
+      if (key === state.lastPayoffRefreshKey) return;
+      state.lastPayoffRefreshKey = key;
+      loadPayoff(ctx.expiration, ctx.strike, ctx);
+    }
+    function pct(v) { return v == null ? "--" : `${Math.round(v * 100)}%`; }
     function signed2(v) { return v == null ? "--" : `${v >= 0 ? "+" : ""}${fmt2(v)}`; }
     function greekRow(label, g, iv, prime = "", dte = "", strike = "", cls = "") {
       if (!g) return "";
@@ -1137,10 +1264,10 @@
         : [{ type: "line", xref: "x", yref: "paper", x0: K, x1: K, y0: 0, y1: 0.80, line: { color: "#facc15", width: 1 } }];
       const strikeAnnotations = isStrangle
         ? [
-            { x: putK, yref: "paper", y: 0.83, text: `Put ${fmt2(putK)}`, showarrow: false, font: { color: "#facc15", size: 13 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#facc15", borderwidth: 1, borderpad: 4 },
-            { x: callK, yref: "paper", y: 0.83, text: `Call ${fmt2(callK)}`, showarrow: false, font: { color: "#facc15", size: 13 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#facc15", borderwidth: 1, borderpad: 4 },
+            { x: putK, yref: "paper", y: 0.83, text: `Put ${fmt0(putK)}`, showarrow: false, font: { color: "#facc15", size: 13 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#facc15", borderwidth: 1, borderpad: 4 },
+            { x: callK, yref: "paper", y: 0.83, text: `Call ${fmt0(callK)}`, showarrow: false, font: { color: "#facc15", size: 13 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#facc15", borderwidth: 1, borderpad: 4 },
           ]
-        : [{ x: K, yref: "paper", y: 0.83, text: `Strike ${fmt2(K)}`, showarrow: false, font: { color: "#facc15", size: 14 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#facc15", borderwidth: 1, borderpad: 4 }];
+        : [{ x: K, yref: "paper", y: 0.83, text: `Strike ${fmt0(K)}`, showarrow: false, font: { color: "#facc15", size: 14 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#facc15", borderwidth: 1, borderpad: 4 }];
       const spotAnnotation = Number.isFinite(currentSpot)
         ? [{ x: currentSpot, yref: "paper", y: 0.91, text: `Spot ${fmt2(currentSpot)}`, showarrow: false, font: { color: "#ffffff", size: 13 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#ffffff", borderwidth: 1, borderpad: 4 }]
         : [];
@@ -1184,6 +1311,30 @@
       renderOptionChain();
       renderNearAtm();
       loadNearAtm();
+    }
+    function initPremiumPanel() {
+      // Premium (LAST) panel lives on the Spot page, not in STRAT.
+      if (state.stratMode) return;
+      $("premiumPanel").hidden = false;
+      $("premiumDay").addEventListener("change", ev => loadPremiumStrikes(ev.target.value));
+      $("premiumStrike").addEventListener("change", ev => loadPremiumSeries(ev.target.value, $("premiumDay").value));
+      const ulBtn = $("toggleUnderlying");
+      ulBtn.hidden = false;
+      ulBtn.addEventListener("click", () => {
+        state.hideUnderlying = !state.hideUnderlying;
+        ulBtn.textContent = state.hideUnderlying ? "Mostrar subyacente" : "Ocultar subyacente";
+        ulBtn.classList.toggle("off", state.hideUnderlying);
+        if (state.rows.length) render();
+      });
+      const pctBtn = $("togglePct");
+      pctBtn.hidden = false;
+      pctBtn.addEventListener("click", () => {
+        state.premiumPct = !state.premiumPct;
+        pctBtn.textContent = state.premiumPct ? "Primas $" : "Primas %";
+        pctBtn.classList.toggle("on", state.premiumPct);
+        if (state.rows.length) render();
+      });
+      initPremiumControls();
     }
     function normalizedRows() {
       return state.rows.map(r => ({
@@ -1248,6 +1399,12 @@
     }
 
 
+    function selectedSessionRange() {
+      const day = state.premiumDay || ($("premiumDay") && $("premiumDay").value);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day || "")) return null;
+      return [new Date(`${day}T00:00:00`), new Date(`${day}T23:59:59`)];
+    }
+
     function paddedTimeRange(xValues) {
       if (!xValues.length) return undefined;
       const times = xValues.map(v => new Date(v).getTime()).filter(Number.isFinite);
@@ -1259,73 +1416,190 @@
       return [new Date(min), new Date(max + rightPad)];
     }
 
-    function strategyPriceLines() {
+    function withRightPad(range, frac = 0.05) {
+      // Leave a gap between the last point and the right frame.
+      if (!range) return range;
+      const a = new Date(range[0]).getTime(), b = new Date(range[1]).getTime();
+      if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return range;
+      return [new Date(a), new Date(b + (b - a) * frac)];
+    }
+
+    function robustRange(vals) {
+      // Fit the axis to the bulk of the data (2nd..98th pct), ignoring outlier spikes.
+      const a = vals.filter(Number.isFinite).slice().sort((x, y) => x - y);
+      if (a.length < 2) return null;
+      const q = f => a[Math.min(a.length - 1, Math.max(0, Math.round(f * (a.length - 1))))];
+      let lo = q(0.02), hi = q(0.98);
+      if (!(hi > lo)) { lo = a[0]; hi = a[a.length - 1]; }
+      if (!(hi > lo)) return null;
+      const pad = (hi - lo) * 0.10;
+      return [lo - pad, hi + pad];
+    }
+
+    function strategyPriceLines(yLo, yHi) {
+      // Note: BE/strike levels do NOT drive the axis scale (that follows the price/spot only).
+      // In-range levels draw as lines; out-of-range BE are shown as labels parked at the chart edge.
+      if (state.stratMode) return { shapes: [], annotations: [] };
       const d = state.activeStrategy;
-      if (state.stratMode || !d || d.symbol !== state.symbol) return { shapes: [], annotations: [], values: [] };
-      const lines = d.type === "short_strangle"
-        ? [
-            { key: "be_low", label: "BE", value: Number(d.be_low), color: "#ff3b4f", dash: "dot" },
-            { key: "put", label: "Put", value: Number(d.put_strike), color: "#facc15", dash: "dash" },
-            { key: "call", label: "Call", value: Number(d.call_strike), color: "#facc15", dash: "dash" },
-            { key: "be_high", label: "BE", value: Number(d.be_high), color: "#ff3b4f", dash: "dot" },
-          ]
-        : [
-            { key: "be_low", label: "BE", value: Number(d.be_low), color: "#ff3b4f", dash: "dot" },
-            { key: "strike", label: "Strike", value: Number(d.strike), color: "#facc15", dash: "dash" },
-            { key: "be_high", label: "BE", value: Number(d.be_high), color: "#ff3b4f", dash: "dot" },
-          ];
+      let lines = null;
+      if (d && d.symbol === state.symbol) {
+        lines = d.type === "short_strangle"
+          ? [
+              { label: "BE", value: Number(d.be_low), color: "#ff3b4f", dash: "dot" },
+              { label: "Put", value: Number(d.put_strike), color: "#facc15", dash: "dash" },
+              { label: "Call", value: Number(d.call_strike), color: "#facc15", dash: "dash" },
+              { label: "BE", value: Number(d.be_high), color: "#ff3b4f", dash: "dot" },
+            ]
+          : [
+              { label: "BE", value: Number(d.be_low), color: "#ff3b4f", dash: "dot" },
+              { label: "Strike", value: Number(d.strike), color: "#facc15", dash: "dash" },
+              { label: "BE", value: Number(d.be_high), color: "#ff3b4f", dash: "dot" },
+            ];
+      } else if (state.premium && Number.isFinite(Number(state.premium.strike))) {
+        // Fallback: straddle on the selected strike. BE = strike +/- session-open credit (call+put).
+        const K = Number(state.premium.strike);
+        const c0 = ((state.premium.call && state.premium.call.last) || []).find(v => Number.isFinite(v) && v > 0);
+        const p0 = ((state.premium.put && state.premium.put.last) || []).find(v => Number.isFinite(v) && v > 0);
+        const credit = (Number.isFinite(c0) && Number.isFinite(p0)) ? c0 + p0 : null;
+        lines = [{ label: "Strike", value: K, color: "#facc15", dash: "dash" }];
+        if (credit) {
+          lines.unshift({ label: "BE", value: K - credit, color: "#ff3b4f", dash: "dot" });
+          lines.push({ label: "BE", value: K + credit, color: "#ff3b4f", dash: "dot" });
+        }
+      }
+      if (!lines) return { shapes: [], annotations: [] };
       const validLines = lines.filter(line => Number.isFinite(line.value));
-      return {
-        values: validLines.map(line => line.value),
-        shapes: validLines.map(line => ({
-          type: "line", xref: "paper", yref: "y", x0: 0, x1: 0.965,
-          y0: line.value, y1: line.value,
-          line: { color: line.color, width: 1, dash: line.dash }, layer: "above"
-        })),
-        annotations: validLines.map(line => ({
-          xref: "paper", yref: "y", x: 0.965, y: line.value,
-          xanchor: "left", yanchor: "middle", showarrow: false,
-          text: `${line.label} ${line.label === "BE" ? fmtBE0(line.value) : fmt2(line.value)}`,
-          font: { color: line.color, size: 11, weight: 700 },
-          bgcolor: "rgba(11,14,20,0.85)", bordercolor: line.color,
-          borderwidth: 1, borderpad: 3
-        }))
-      };
-    }    function drawChart(rows, lastSpot) {
+      const hasRange = Number.isFinite(yLo) && Number.isFinite(yHi);
+      const shapes = [];
+      const annotations = [];
+      for (const line of validLines) {
+        const label = `${line.label} ${line.label === "BE" ? fmtBE0(line.value) : fmt0(line.value)}`;
+        const inRange = !hasRange || (line.value >= yLo && line.value <= yHi);
+        if (inRange) {
+          shapes.push({ type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: line.value, y1: line.value,
+            line: { color: line.color, width: 1, dash: line.dash }, layer: "above" });
+          annotations.push({ xref: "paper", yref: "y", x: 1, y: line.value, xanchor: "right", yanchor: "middle",
+            showarrow: false, text: label, font: { color: line.color, size: 11, weight: 700 },
+            bgcolor: "rgba(11,14,20,0.85)", bordercolor: line.color, borderwidth: 1, borderpad: 3 });
+        } else {
+          const top = line.value > yHi;
+          annotations.push({ xref: "paper", yref: "paper", x: 1, y: top ? 1 : 0, xanchor: "right",
+            yanchor: top ? "top" : "bottom", showarrow: false, text: `${label} ${top ? "▲" : "▼"}`,
+            font: { color: line.color, size: 10, weight: 700 }, bgcolor: "rgba(11,14,20,0.85)",
+            bordercolor: line.color, borderwidth: 1, borderpad: 3 });
+        }
+      }
+      return { shapes, annotations };
+    }
+
+    function premiumSumSeries(call, put) {
+      const n = Math.min(
+        call && call.t ? call.t.length : 0,
+        put && put.t ? put.t.length : 0,
+        call && call.last ? call.last.length : 0,
+        put && put.last ? put.last.length : 0
+      );
+      const t = [];
+      const y = [];
+      for (let i = 0; i < n; i++) {
+        const callLast = Number(call.last[i]);
+        const putLast = Number(put.last[i]);
+        if (!Number.isFinite(callLast) || !Number.isFinite(putLast)) continue;
+        t.push(put.t[i] || call.t[i]);
+        y.push(callLast + putLast);
+      }
+      return t.length ? { t, y } : null;
+    }
+
+    function drawChart(rows, lastSpot) {
       if (state.stratMode) { Plotly.purge("chart"); return; }
-      const x = rows.map(r => r.timestamp);
-      const y = rows.map(r => r.spot);
-      const xRange = paddedTimeRange(x);
-      const strategyLines = strategyPriceLines();
-      const yAll = [...y, ...strategyLines.values];
-      const ymin = Math.min(...yAll), ymax = Math.max(...yAll), span = Math.max(ymax - ymin, 0.01);
+      // Past-day view: draw that session's own underlying (so price and premium align in time).
+      const sessionUnder = state.premiumPast && state.premium && state.premium.underlying;
+      const x = sessionUnder ? state.premium.underlying.t : rows.map(r => r.timestamp);
+      const y = sessionUnder ? state.premium.underlying.bid : rows.map(r => r.spot);
+      if (sessionUnder && y.length) lastSpot = y[y.length - 1];
+      // Left axis scales to the PRICE/spot only (not the BE/strike levels).
+      const ymin = Math.min(...y), ymax = Math.max(...y), span = Math.max(ymax - ymin, 0.01);
+      const yLo = ymin - span * 0.18, yHi = ymax + span * 0.22;
+      const strategyLines = strategyPriceLines(yLo, yHi);
+      // Optional toggle: show premiums as % change from the session's first value.
+      const pct = state.premiumPct;
+      const toPct = arr => {
+        const base = (arr || []).find(v => Number.isFinite(v) && v !== 0);
+        return (pct && Number.isFinite(base)) ? arr.map(v => (v / base - 1) * 100) : arr;
+      };
+      const yfmt = pct ? "%{y:,.1f}%" : "%{y:,.2f}";
       const trace = {
         x, y, type: "scatter", mode: "lines", name: state.symbol,
         line: { color: "#22d3ee", width: 3 },
         hovertemplate: "%{x}<br>Bid: %{y:,.2f}<extra></extra>"
       };
+      // Premium (LAST) overlay: call and put share one right axis.
+      const premiumTraces = [];
+      const premiumX = [];
+      const y2Vals = [];
+      const p = state.premium;
+      const hasCall = !!(p && p.call && p.call.t && p.call.t.length);
+      const hasPut = !!(p && p.put && p.put.t && p.put.t.length);
+      if (hasCall) {
+        const cy = toPct(p.call.last);
+        premiumTraces.push({ x: p.call.t, y: cy, type: "scatter", mode: "lines", name: `call ${p.strike}`,
+          yaxis: "y2", line: { color: "rgba(0, 230, 118, 0.5)", width: 1, dash: "solid" }, hovertemplate: `%{x}<br>call ${yfmt}<extra></extra>` });
+        premiumX.push(...p.call.t); y2Vals.push(...cy);
+      }
+      if (hasPut) {
+        const py = toPct(p.put.last);
+        premiumTraces.push({ x: p.put.t, y: py, type: "scatter", mode: "lines", name: `put ${p.strike}`,
+          yaxis: "y2", line: { color: "rgba(255, 59, 79, 0.5)", width: 1, dash: "solid" }, hovertemplate: `%{x}<br>put ${yfmt}<extra></extra>` });
+        premiumX.push(...p.put.t); y2Vals.push(...py);
+      }
+      const premiumSum = hasCall && hasPut ? premiumSumSeries(p.call, p.put) : null;
+      if (premiumSum) {
+        const sy = toPct(premiumSum.y);
+        premiumTraces.push({ x: premiumSum.t, y: sy, type: "scatter", mode: "lines", name: `call+put ${p.strike}`,
+          yaxis: "y2", line: { color: "#facc15", width: 2.6 }, hovertemplate: `%{x}<br>call + put ${yfmt}<extra></extra>` });
+        premiumX.push(...premiumSum.t); y2Vals.push(...sy);
+      }
+      const xRange = withRightPad(selectedSessionRange() || paddedTimeRange([...x, ...premiumX]));
       const layout = {
         uirevision: `${state.symbol}-manual-zoom`,
         paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", separators: ",.",
         font: { color: "#cbd5e1", family: "Inter, Arial, sans-serif", size: 11 },
-        margin: { l: state.stratMode ? 380 : 54, r: 330, t: 76, b: 38 }, showlegend: false, hovermode: "closest", dragmode: "pan",
-        xaxis: { range: xRange, showgrid: false, color: "#dbeafe", linecolor: "#263244", tickfont: { color: "#dbeafe", size: 10 }, zeroline: false },
-        yaxis: { range: [ymin - span * 0.18, ymax + span * 0.22], showgrid: true, gridcolor: "#15191f", linecolor: "#2a3140", color: "#cbd5e1", zeroline: false, tickformat: ",.2f" },
+        margin: { l: state.stratMode ? 380 : 54, r: state.stratMode ? 330 : 330, t: 76, b: 38 },
+        showlegend: premiumTraces.length > 0, legend: { x: 0.01, y: 0.99, bgcolor: "rgba(5,8,13,0.5)", font: { size: 11 } },
+        hovermode: "closest", dragmode: "pan",
+        xaxis: { range: xRange, showgrid: false, color: "#dbeafe", showline: true, mirror: true, linecolor: "#3a4453", linewidth: 1, tickfont: { color: "#dbeafe", size: 10 }, zeroline: false },
+        yaxis: { range: [yLo, yHi], showgrid: true, gridcolor: "#15191f", showline: true, mirror: true, linecolor: "#3a4453", linewidth: 1, color: "#cbd5e1", zeroline: false, tickformat: ",.2f" },
+        yaxis2: { overlaying: "y", side: "right", autorange: true, showgrid: false, showline: true, linecolor: "#3a4453", linewidth: 1, zeroline: pct, zerolinecolor: "#2a3140", color: "#cbd5e1", tickformat: pct ? ",.1f" : ",.2f", ticksuffix: pct ? "%" : "" },
         shapes: [
-          { type: "line", xref: "paper", yref: "y", x0: 0, x1: 0.965, y0: lastSpot, y1: lastSpot, line: { color: "#22d3ee", width: 1 }, layer: "above" },
+          { type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: lastSpot, y1: lastSpot, line: { color: "#22d3ee", width: 1 }, layer: "above" },
           ...strategyLines.shapes
         ],
         annotations: [
-          { xref: "paper", yref: "y", x: 0.965, y: lastSpot, xanchor: "left", yanchor: "middle", text: `Bid ${fmt2(lastSpot)}`, showarrow: false, font: { color: "#22d3ee", size: 11, weight: 700 }, bgcolor: "rgba(11,14,20,0.85)", bordercolor: "#22d3ee", borderwidth: 1, borderpad: 3 },
+          { xref: "paper", yref: "y", x: 1, y: lastSpot, xanchor: "right", yanchor: "middle", text: `Bid ${fmt2(lastSpot)}`, showarrow: false, font: { color: "#22d3ee", size: 11, weight: 700 }, bgcolor: "rgba(11,14,20,0.85)", bordercolor: "#22d3ee", borderwidth: 1, borderpad: 3 },
           ...strategyLines.annotations
         ]
       };
+      if (!hasCall && !hasPut) {
+        delete layout.yaxis2;
+      } else {
+        const r2 = robustRange(y2Vals);   // fit the right axis to the bulk, not outlier spikes
+        if (r2) { layout.yaxis2.autorange = false; layout.yaxis2.range = r2; }
+      }
+      // Toggle: hide the underlying line/axis so only the call & put premiums show.
+      const chartTraces = state.hideUnderlying ? [...premiumTraces] : [trace, ...premiumTraces];
+      if (state.hideUnderlying) {
+        layout.yaxis.visible = false;
+        layout.shapes = [];
+        layout.annotations = [];
+        if (premiumX.length) layout.xaxis.range = state.userRange && state.userRange.xaxis ? state.userRange.xaxis : paddedTimeRange(premiumX);
+      }
       if (state.userRange) {
         if (state.userRange.xaxis) layout.xaxis.range = state.userRange.xaxis;
-        if (state.userRange.yaxis) layout.yaxis.range = state.userRange.yaxis;
+        if (!state.hideUnderlying && state.userRange.yaxis) layout.yaxis.range = state.userRange.yaxis;
       }
       state.applyingLayout = true;
-      Plotly.react("chart", [trace], layout, { responsive: true, displaylogo: false, scrollZoom: true, modeBarButtonsToRemove: ["lasso2d", "select2d"] })
+      Plotly.react("chart", chartTraces, layout, { responsive: true, displaylogo: false, scrollZoom: true, modeBarButtonsToRemove: ["lasso2d", "select2d"] })
         .then(() => { state.applyingLayout = false; bindPlotlyRangeEvents(); })
         .catch(() => { state.applyingLayout = false; });
     }
@@ -1357,6 +1631,7 @@
     async function loadText(text, sourceLabel) {
       state.rows = parseCsv(text);
       render();
+      maybeRefreshPayoffFromCsv();
     }
     async function loadFile(file) {
       if (!file) return;
@@ -1413,6 +1688,7 @@
       if (ev.key === ACTIVE_STRATEGY_KEY && !state.stratMode && state.rows.length) render();
     });
     initStratMode();
+    initPremiumPanel();
     if (state.httpMode) {
       refreshFile();
       state.timer = setInterval(refreshFile, 5000);
