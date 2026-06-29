@@ -151,6 +151,36 @@ def fetch_option_chain(ticker_symbol: str) -> tuple[list[dict], pd.DataFrame]:
     return expiration_summary, pd.concat(rows, ignore_index=True)
 
 
+def fetch_and_save_nearest(ticker_symbol: str) -> tuple[Path, str, int]:
+    """Fetch ONLY the nearest expiration from Yahoo and save it as an option-chain CSV.
+
+    Fast (one network call) and enough for the Start ladder. Returns (csv_path, expiration, dte).
+    """
+    ticker_symbol = ticker_symbol.upper().strip()
+    ticker = yf.Ticker(ticker_symbol)
+    expirations = list(ticker.options)
+    if not expirations:
+        raise RuntimeError(f"No option expirations found for {ticker_symbol}.")
+
+    nearest = sorted(expirations, key=expiration_dte)[0]
+    dte = expiration_dte(nearest)
+    chain = ticker.option_chain(nearest)
+    calls = chain.calls.copy()
+    puts = chain.puts.copy()
+    calls.insert(0, "option_type", "CALL")
+    puts.insert(0, "option_type", "PUT")
+    combined = pd.concat([calls, puts], ignore_index=True)
+    combined.insert(0, "ticker", ticker_symbol)
+    combined.insert(1, "expiration", nearest)
+    combined.insert(2, "dte", dte)
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = OUTPUT_DIR / f"{ticker_symbol}_option_chain_{timestamp}.csv"
+    combined.to_csv(path, index=False)
+    return path, nearest, dte
+
+
 def print_summary(ticker_symbol: str, expiration_summary: list[dict]) -> None:
     print(f"\nOption chain expirations for {ticker_symbol.upper()} ordered by nearest DTE:\n")
     print(f"{'Expiration':<12} {'DTE':>5} {'Calls':>7} {'Puts':>7} {'Total':>7}")

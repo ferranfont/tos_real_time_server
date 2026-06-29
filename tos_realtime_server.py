@@ -1,76 +1,44 @@
-import csv
 import json
 import re
 import time
 from pathlib import Path
-from datetime import datetime
+from datetime import date, datetime
 
 import win32com.client as win32
+
+import ladder
+import session_manager
+import session_store as store
+from config import (
+    TICKERS,
+    SERVER_REQUEST_COOLDOWN_FREQUENCY,
+    RECORD_ONLY_MARKET_HOURS,
+    AUTO_ANCHOR_AT_OPEN,
+    DEFAULT_LEVELS,
+)
 
 
 # =========================
 # CONFIGURACION
 # =========================
 
-UNDERLYING_SYMBOL = "MU"
-INTERVAL_SECONDS = 60              # 60 = guarda una fila cada minuto
+UNDERLYING_SYMBOL = TICKERS[0]     # de momento solo MU (config.TICKERS)
 
 # Si no hay active_symbols.json, se usa esto como fallback.
 DEFAULT_OPTION_SYMBOLS = [".MU260626P1195"]
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "RTD_live_excel"
-DATA_DIR = Path(__file__).resolve().parent / "data"
-LIVE_DATA_DIR = DATA_DIR / "live"
-CSV_FILE_NAME = "registro_opcion_minuto_a_minuto.csv"
 EXCEL_FILE = OUTPUT_DIR / "tos_live_option.xlsx"
 ACTIVE_SYMBOLS_FILE = OUTPUT_DIR / "active_symbols.json"  # lo escribe el boton SEND del dashboard
 
-FIELDS = [
-    "LAST",
-    "BID",
-    "ASK",
-    "MARK",
-    "VOLUME",
-    "DELTA",
-    "GAMMA",
-    "THETA",
-    "VEGA",
-    "IMPL_VOL",
-    "OPEN_INT",
-    "HIGH",
-    "LOW",
-]
-
-UNDERLYING_FIELDS = ["LAST", "BID", "ASK", "MARK", "VOLUME"]
-UNDERLYING_CSV_FIELDS = [f"UNDERLYING_{field}" for field in UNDERLYING_FIELDS]
+# BID es el unico precio de opcion que almacenamos. Cabeceras en session_store.
+FIELDS = store.CONTRACT_FIELDS               # BID, VOLUME, DELTA, GAMMA, THETA, VEGA, IMPL_VOL, OPEN_INT
+UNDERLYING_FIELDS = store.UNDERLYING_FIELDS  # LAST, BID, ASK, MARK, VOLUME (subyacente intacto)
 OPTION_HEADER_ROW = 5
 OPTION_FIRST_VALUE_ROW = 6
-MAX_OPTION_ROWS = 80              # portfolio intradia: varias estrategias/patas desde A6
+MAX_OPTION_ROWS = 80              # portfolio intradia: varias patas desde A6
 UNDERLYING_HEADER_ROW = 1
 UNDERLYING_VALUE_ROW = 2
-OPTION_METADATA_FIELDS = [
-    "strategy_id",
-    "strategy",
-    "strategy_label",
-    "expiration",
-    "dte",
-    "strike",
-    "leg_type",
-    "side",
-    "qty",
-    "leg_index",
-]
-CSV_HEADERS = [
-    "timestamp",
-    "symbol",
-    *OPTION_METADATA_FIELDS,
-    "underlying_symbol",
-    *UNDERLYING_CSV_FIELDS,
-    *FIELDS,
-    "MID_MANUAL",
-    "SPREAD",
-    "VOLUME_1M",
-]
 
 
 def safe_symbol_token(symbol):
@@ -82,10 +50,6 @@ def option_underlying_symbol(symbol):
     match = re.match(r"^\.?([A-Z]+)\d{6}[CP]", str(symbol or "").strip().upper())
     return match.group(1) if match else None
 
-
-def live_csv_file(symbol=UNDERLYING_SYMBOL, now=None):
-    now = now or datetime.now()
-    return LIVE_DATA_DIR / f"{safe_symbol_token(symbol)}_{now:%Y-%m-%d}_{CSV_FILE_NAME}"
 
 def clean_value(value):
     """Limpia valores que vienen de Excel/RTD."""
@@ -279,108 +243,86 @@ def apply_symbols(ws, legs, build_formulas=False):
             ws.Range(ws.Cells(row, 1), ws.Cells(row, last_col)).ClearContents()
 
 
-def create_csv_if_needed(csv_file):
-    csv_file.parent.mkdir(parents=True, exist_ok=True)
-
-    if not csv_file.exists():
-        with open(csv_file, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
-            writer.writeheader()
-        return
-
-    with open(csv_file, "r", newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f, skipinitialspace=True)
-        if reader.fieldnames is None:
-            rows = []
-            existing_headers = []
-        else:
-            existing_headers = [header.strip() for header in reader.fieldnames]
-            rows = [{key.strip(): value for key, value in row.items() if key is not None} for row in reader]
-
-    if existing_headers == CSV_HEADERS:
-        return
-
-    with open(csv_file, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_HEADERS, extrasaction="ignore")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
-
-
-def read_option_row(ws, value_row, leg, previous_volume):
-    """Lee una fila de opcion y anade metadata de estrategia para filtrar el CSV."""
-    symbol = clean_value(ws.Cells(value_row, 1).Value)
-    if not symbol:
-        return None, previous_volume
-
-    row = {
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+def build_session_index(symbol, day, legs):
+    """Session metadata written to _index.json (contracts + expiration)."""
+    contracts = []
+    expiration = ""
+    for leg in legs:
+        sym = leg.get("symbol")
+        if not sym:
+            continue
+        expiration = expiration or (leg.get("expiration") or "")
+        contracts.append({
+            "symbol": sym,
+            "type": (leg.get("leg_type") or "").upper(),
+            "strike": leg.get("strike"),
+            "expiration": leg.get("expiration") or "",
+            "file": store.contract_file_name(sym),
+        })
+    return {
         "symbol": symbol,
-        "underlying_symbol": leg.get("underlying_symbol") or option_underlying_symbol(symbol) or UNDERLYING_SYMBOL,
+        "date": store._day_text(day),
+        "expiration": expiration,
+        "underlying_file": store.underlying_path(symbol, day).name,
+        "contracts": contracts,
     }
-    for field in OPTION_METADATA_FIELDS:
-        row[field] = leg.get(field, "")
+
+
+def read_underlying_row(ws):
+    """One underlying tape row from the Excel block (row 2)."""
+    row = {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     for col, field in enumerate(UNDERLYING_FIELDS, start=2):
         row[f"UNDERLYING_{field}"] = clean_value(ws.Cells(UNDERLYING_VALUE_ROW, col).Value)
+    return row
+
+
+def read_leg_row(ws, value_row, previous_volume):
+    """One option-contract tape row (BID + greeks/IV) for the leg at value_row."""
+    symbol = clean_value(ws.Cells(value_row, 1).Value)
+    if not symbol:
+        return None, None, previous_volume
+    row = {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     for col, field in enumerate(FIELDS, start=2):
         row[field] = clean_value(ws.Cells(value_row, col).Value)
-
-    bid = safe_float(row.get("BID"))
-    ask = safe_float(row.get("ASK"))
     volume = safe_float(row.get("VOLUME"))
-
-    if bid is not None and ask is not None:
-        row["MID_MANUAL"] = round((bid + ask) / 2, 6)
-        row["SPREAD"] = round(ask - bid, 6)
-    else:
-        row["MID_MANUAL"] = ""
-        row["SPREAD"] = ""
-
-    if previous_volume is not None and volume is not None:
-        row["VOLUME_1M"] = max(volume - previous_volume, 0)
-    else:
-        row["VOLUME_1M"] = ""
-
-    return row, volume
-
-
-def append_to_csv(row, csv_file):
-    with open(csv_file, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_HEADERS, extrasaction="ignore")
-        writer.writerow(row)
+    row["VOLUME_1M"] = max(volume - previous_volume, 0) if (previous_volume is not None and volume is not None) else ""
+    return symbol, row, volume
 
 
 def main():
+    symbol = UNDERLYING_SYMBOL
+    day = date.today()
     print("Abre thinkorswim y deja la plataforma conectada.")
     print("Creando Excel RTD...")
-    print(f"Excel live: {EXCEL_FILE}")
-    csv_file = live_csv_file()
-    print(f"CSV salida: {csv_file}")
-    print(f"Simbolos:   {ACTIVE_SYMBOLS_FILE} (lo escribe el boton SEND)")
+    print(f"Excel live:  {EXCEL_FILE}")
+    print(f"Sesion:      {store.session_dir(symbol, day)}")
+    print(f"Simbolos:    {ACTIVE_SYMBOLS_FILE} (lo escribe el boton SEND)")
 
     legs = load_active_symbols()
     excel, wb, ws = get_or_create_excel(legs)
-    create_csv_if_needed(csv_file)
-    csv_files_ready = {csv_file}
+    store.write_index(symbol, day, build_session_index(symbol, day, legs))
 
     previous_volumes = {}
     last_signature = legs_signature(legs)
-    print(f"\nMonitorizando {len(legs)} patas:")
+    recording = None  # None forces a status print on the first loop
+    anchored_day = None  # auto-anchor the ladder once per session at the open
+    print(f"Sesion:      {session_manager.status()}")
+    print(f"\nMonitorizando {len(legs)} contratos (cada {SERVER_REQUEST_COOLDOWN_FREQUENCY}s):")
     for leg in legs:
-        print(f"- {leg.get('strategy_label')} | {leg.get('leg_type')} {leg.get('strike')} | {leg.get('symbol')}")
+        print(f"- {leg.get('leg_type')} {leg.get('strike')} | {leg.get('symbol')}")
     print("Pulsa CTRL + C para parar.\n")
 
     while True:
         try:
-            next_csv_file = live_csv_file()
-            if next_csv_file != csv_file:
-                csv_file = next_csv_file
-                create_csv_if_needed(csv_file)
-                csv_files_ready = {csv_file}
+            # Cada dia es una carpeta de sesion nueva (sin arrastrar simbolos viejos).
+            today = date.today()
+            if today != day:
+                day = today
+                store.write_index(symbol, day, build_session_index(symbol, day, legs))
                 previous_volumes = {}
-                print(f"[CSV] nuevo archivo diario: {csv_file}")
+                print(f"[SESION] nueva carpeta: {store.session_dir(symbol, day)}")
 
-            # Aplica nuevos simbolos si el dashboard los cambio (SEND).
+            # Aplica nuevos simbolos si el dashboard los cambio (SEND / Start).
             current = load_active_symbols()
             current_signature = legs_signature(current)
             if current_signature != last_signature:
@@ -388,25 +330,47 @@ def main():
                 legs = current
                 last_signature = current_signature
                 previous_volumes = {}
-                print(f"[SEND] portfolio actualizado: {len(legs)} patas")
-                for leg in legs:
-                    print(f"- {leg.get('strategy_label')} | {leg.get('leg_type')} {leg.get('strike')} | {leg.get('symbol')}")
+                store.write_index(symbol, day, build_session_index(symbol, day, legs))
+                print(f"[SEND] portfolio actualizado: {len(legs)} contratos")
 
+            # Siempre abierto, pero graba solo en sesion (NYSE). Captura desde el primer tick.
+            market_open = (not RECORD_ONLY_MARKET_HOURS) or session_manager.is_market_open()
+            if not market_open:
+                if recording is not False:
+                    print(f"[SESION] {session_manager.status()} - en espera, no grabo")
+                    recording = False
+                time.sleep(SERVER_REQUEST_COOLDOWN_FREQUENCY)
+                continue
+            if not recording:
+                print(f"[SESION] {session_manager.status()} - grabando")
+                recording = True
+
+            # Auto-anclar la escalera al abrir (una vez por dia): refresca cadena + ATM + strikes.
+            if AUTO_ANCHOR_AT_OPEN and anchored_day != day:
+                for tk in TICKERS:
+                    try:
+                        res = ladder.anchor_ladder(ticker=tk, levels=DEFAULT_LEVELS, refresh=True, mode="auto")
+                        print(f"[AUTO-START] {tk}: {res['expiration']} ATM {res['atm']} | "
+                              f"{res['contracts']} contratos ({res['chain']})")
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"[AUTO-START] error {tk}: {exc}")
+                anchored_day = day
+                # La proxima vuelta detecta el nuevo active_symbols.json y aplica la escalera.
+
+            # Tape del subyacente (una linea por tick).
+            store.append_row(store.underlying_path(symbol, day), store.UNDERLYING_HEADER, read_underlying_row(ws))
+
+            # Tape por contrato.
             for i, leg in enumerate(legs):
                 value_row = OPTION_FIRST_VALUE_ROW + i
-                key = leg_volume_key(leg)
-                row, current_volume = read_option_row(ws, value_row, leg, previous_volumes.get(key))
-                previous_volumes[key] = current_volume
-                if row is not None:
-                    row_csv_file = live_csv_file(row.get("underlying_symbol") or UNDERLYING_SYMBOL)
-                    if row_csv_file not in csv_files_ready:
-                        create_csv_if_needed(row_csv_file)
-                        csv_files_ready.add(row_csv_file)
-                        print(f"[CSV] archivo activo: {row_csv_file}")
-                    append_to_csv(row, row_csv_file)
-                    print(row)
+                sym = leg.get("symbol")
+                contract_sym, row, volume = read_leg_row(ws, value_row, previous_volumes.get(sym))
+                previous_volumes[sym] = volume
+                if contract_sym and row is not None:
+                    und = leg.get("underlying_symbol") or option_underlying_symbol(contract_sym) or symbol
+                    store.append_row(store.contract_path(und, day, contract_sym), store.CONTRACT_HEADER, row)
 
-            time.sleep(INTERVAL_SECONDS)
+            time.sleep(SERVER_REQUEST_COOLDOWN_FREQUENCY)
 
         except KeyboardInterrupt:
             print("\nMonitorizacion detenida por el usuario.")

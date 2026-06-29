@@ -6,7 +6,10 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
-from get_near_ATM_strikes import build_payload, DEFAULT_LEVELS
+import ladder
+import session_store as store
+from config import DEFAULT_LEVELS
+from get_near_ATM_strikes import build_payload
 from utils.black_scholes import bs_price, bs_greeks, DEFAULT_RATE
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -50,6 +53,93 @@ def latest_live_csv(ticker="MU"):
     if LEGACY_TOS_CSV.exists():
         return LEGACY_TOS_CSV
     return today_file
+
+
+def _scale_option_price(value, field="BID"):
+    """Option price from a tape cell, de-scaling the legacy comma-strip x100."""
+    price = parse_live_price(value, field)
+    if price is None:
+        return None
+    if abs(price) >= 1000:
+        price /= 100.0
+    return price
+
+
+def session_strikes(ticker, day):
+    """Strikes + ATM from a per-contract session folder. None if no folder."""
+    idx = store.read_index(ticker, day)
+    if not idx:
+        return None
+    strikes = set()
+    for c in idx.get("contracts", []):
+        try:
+            strikes.add(float(c.get("strike")))
+        except (TypeError, ValueError):
+            pass
+    out = [int(s) if s.is_integer() else s for s in sorted(strikes)]
+    underlying = None
+    for _ts, raw in store.read_series(store.underlying_path(ticker, day), "UNDERLYING_BID"):
+        ub = parse_live_price(raw, "UNDERLYING_BID")
+        if ub:
+            underlying = ub  # most recent valid underlying bid
+    atm = min(out, key=lambda s: abs(s - underlying)) if out and underlying else None
+    return {
+        "date": store._day_text(day),
+        "source": store.session_dir(ticker, day).name,
+        "strikes": out,
+        "underlying": round(underlying, 2) if underlying else None,
+        "atm": atm,
+    }
+
+
+def session_premium(ticker, day, strike):
+    """Call/put BID series + underlying from a per-contract session folder. None if no folder."""
+    idx = store.read_index(ticker, day)
+    if not idx:
+        return None
+    target = float(strike)
+    call_file = put_file = None
+    for c in idx.get("contracts", []):
+        try:
+            if float(c.get("strike")) != target:
+                continue
+        except (TypeError, ValueError):
+            continue
+        if (c.get("type") or "").upper() == "CALL":
+            call_file = c.get("file")
+        elif (c.get("type") or "").upper() == "PUT":
+            put_file = c.get("file")
+
+    sdir = store.session_dir(ticker, day)
+
+    def leg_series(fname):
+        out_t, out_v = [], []
+        if fname:
+            for ts, raw in store.read_series(sdir / fname, "BID"):
+                price = _scale_option_price(raw, "BID")
+                if price is not None:
+                    out_t.append(ts)
+                    out_v.append(round(price, 4))
+        return {"t": out_t, "last": out_v}
+
+    under_t, under_b, seen = [], [], set()
+    for ts, raw in store.read_series(store.underlying_path(ticker, day), "UNDERLYING_BID"):
+        if ts in seen:
+            continue
+        ub = parse_live_price(raw, "UNDERLYING_BID")
+        if ub:
+            seen.add(ts)
+            under_t.append(ts)
+            under_b.append(round(ub, 4))
+
+    return {
+        "strike": target,
+        "source": sdir.name,
+        "date": store._day_text(day),
+        "call": leg_series(call_file),
+        "put": leg_series(put_file),
+        "underlying": {"t": under_t, "bid": under_b},
+    }
 
 
 def parse_live_price(value, field=None):
@@ -177,28 +267,19 @@ def latest_live_option_quote(symbol):
         for row in reversed(list(csv.DictReader(f, skipinitialspace=True))):
             if str(row.get("symbol") or "").strip().upper() != wanted:
                 continue
+            # Only BID is stored now; use it as the price for everything.
             bid = parse_option_price(row.get("BID"), "BID")
-            ask = parse_option_price(row.get("ASK"), "ASK")
-            mark = parse_option_price(row.get("MARK"), "MARK")
-            last = parse_option_price(row.get("LAST"), "LAST")
-            if bid is not None and ask is not None and bid > 0 and ask > 0:
-                mid = (bid + ask) / 2.0
-                source = "tos_live_mid"
-            elif mark is not None and mark > 0:
-                mid = mark
-                source = "tos_live_mark"
-            elif last is not None and last > 0:
-                mid = last
-                source = "tos_live_last"
-            else:
+            if bid is None or bid <= 0:
                 return None
+            mid = bid
+            source = "tos_live_bid"
             return {
                 "symbol": symbol,
                 "timestamp": row.get("timestamp", ""),
                 "bid": bid,
-                "ask": ask,
-                "mark": mark,
-                "last": last,
+                "ask": None,
+                "mark": None,
+                "last": None,
                 "mid": round(mid, 4),
                 "source": source,
                 "iv": parse_percent_decimal(row.get("IMPL_VOL")),
@@ -350,6 +431,9 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
             return
         if parsed.path == "/api/live-strikes":
             self.serve_strikes(parse_qs(parsed.query))
+            return
+        if parsed.path == "/api/start":
+            self.serve_start(parse_qs(parsed.query))
             return
         if parsed.path in ("/", ""):
             self.path = "/outputs/tos_live_underlying.html"
@@ -628,6 +712,31 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
         ACTIVE_SYMBOLS_FILE.write_text(json.dumps(active, indent=2), encoding="utf-8")
         self._send_json({"ok": True, "path": str(ACTIVE_SYMBOLS_FILE), "added": record, **active})
 
+    def serve_start(self, query):
+        """Start/reset: nearest expiration -> ATM -> 12 strikes each side -> all legs to active_symbols.json.
+
+        Reuses build_payload (chain -> nearest DTE -> spot/ATM -> levels). Writes the full ladder
+        (call+put per strike) so the collector subscribes the whole ladder for the session.
+        """
+        def first(key):
+            vals = query.get(key)
+            return vals[0] if vals else None
+
+        ticker = first("ticker") or "MU"
+        levels = int(first("levels")) if first("levels") not in (None, "") else DEFAULT_LEVELS
+        refresh = (first("refresh") or "1").lower() not in ("0", "false", "no")
+        spot_arg = first("spot")
+        spot = float(spot_arg) if spot_arg not in (None, "") else None
+        try:
+            result = ladder.anchor_ladder(ticker=ticker, levels=levels, refresh=refresh, spot=spot, mode="start")
+        except ValueError as exc:
+            self.send_error(404, str(exc))
+            return
+        except Exception as exc:  # noqa: BLE001
+            self.send_error(500, str(exc))
+            return
+        self._send_json(result)
+
     def serve_premium(self, query):
         """Intraday evolution of the option premium (LAST) for one strike, from the live CSV.
 
@@ -644,6 +753,13 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
             target = float(first("strike"))
         except (TypeError, ValueError):
             self._send_json({"error": "Falta strike valido."})
+            return
+
+        # Folder-first: per-contract session; fall back to legacy flat CSV.
+        folder_day = day or store.latest_session_day(ticker)
+        res = session_premium(ticker, folder_day, target) if folder_day else None
+        if res and (res["call"]["t"] or res["put"]["t"]):
+            self._send_json(res)
             return
 
         csv_path = live_csv_file(ticker, day) if day else latest_live_csv(ticker)
@@ -679,10 +795,11 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
                     continue
             except ValueError:
                 continue
-            last = parse_live_price(cell(row, "LAST"), "LAST")
+            # Premium series now uses BID (LAST/ASK/MARK no longer stored).
+            last = parse_live_price(cell(row, "BID"), "BID")
             if last is None:
                 continue
-            # Legacy data: the collector stripped decimal commas, inflating option LAST by 100
+            # Legacy data: the collector stripped decimal commas, inflating option prices by 100
             # (e.g. 54,60 -> 5460). Near-ATM premiums never reach 1000, so this safely de-scales.
             if abs(last) >= 1000:
                 last /= 100.0
@@ -704,9 +821,9 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
         """List available session days (one live CSV per day)."""
         ticker = (query.get("ticker") or ["MU"])[0]
         token = safe_symbol_token(ticker)
-        days = set()
+        days = set(store.list_session_days(ticker))  # per-contract session folders
         if LIVE_DATA_DIR.exists():
-            for f in LIVE_DATA_DIR.glob(f"{token}_*_{CSV_FILE_NAME}"):
+            for f in LIVE_DATA_DIR.glob(f"{token}_*_{CSV_FILE_NAME}"):  # legacy flat CSVs
                 m = re.search(r"(\d{4}-\d{2}-\d{2})", f.name)
                 if m:
                     days.add(m.group(1))
@@ -717,6 +834,12 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
         """List the strikes present in a session day's live CSV."""
         ticker = (query.get("ticker") or ["MU"])[0]
         day = (query.get("date") or [None])[0]
+        # Folder-first: per-contract session; fall back to legacy flat CSV.
+        folder_day = day or store.latest_session_day(ticker)
+        res = session_strikes(ticker, folder_day) if folder_day else None
+        if res and res.get("strikes"):
+            self._send_json(res)
+            return
         csv_path = live_csv_file(ticker, day) if day else latest_live_csv(ticker)
         if not csv_path.exists():
             self._send_json({"date": day or "", "strikes": [], "error": "Sin CSV para esa sesion."})

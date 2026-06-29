@@ -9,6 +9,8 @@ import time
 import webbrowser
 from pathlib import Path
 
+import psutil
+
 PROJECT_ROOT = Path(__file__).resolve().parent
 LOG_DIR = PROJECT_ROOT / "logs"
 HOST = "127.0.0.1"
@@ -39,22 +41,34 @@ def wait_for_port(host: str, port: int, timeout: float = 12.0) -> bool:
     return False
 
 
-def pid_is_running(pid: int) -> bool:
+def pid_is_running(pid: int, script: str | None = None) -> bool:
+    """True only if `pid` is a live python process running `script`.
+
+    Uses psutil (os.kill(pid, 0) is unreliable/unsafe on Windows and PIDs get
+    reused, which made main wrongly think the collector was already running).
+    """
     if pid <= 0:
         return False
     try:
-        os.kill(pid, 0)
+        proc = psutil.Process(pid)
+        if not proc.is_running() or proc.status() == psutil.STATUS_ZOMBIE:
+            return False
+        if script:
+            cmdline = " ".join(proc.cmdline()).lower()
+            if "python" not in (proc.name() or "").lower() and "python" not in cmdline:
+                return False
+            return script.lower() in cmdline
         return True
-    except OSError:
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
         return False
 
 
-def pid_from_file(pid_file: Path) -> int | None:
+def pid_from_file(pid_file: Path, script: str | None = None) -> int | None:
     try:
         pid = int(pid_file.read_text(encoding="utf-8").strip())
     except (FileNotFoundError, ValueError, OSError):
         return None
-    if pid_is_running(pid):
+    if pid_is_running(pid, script):
         return pid
     try:
         pid_file.unlink()
@@ -144,7 +158,7 @@ def main() -> int:
     if args.no_collector:
         print("Colector RTD: omitido por --no-collector")
     else:
-        existing_pid = pid_from_file(COLLECTOR_PID_FILE)
+        existing_pid = pid_from_file(COLLECTOR_PID_FILE, COLLECTOR_SCRIPT.name)
         if existing_pid:
             print(f"Colector RTD: PID file activo {existing_pid}; no arranco otro.")
         else:

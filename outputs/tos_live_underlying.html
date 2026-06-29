@@ -388,7 +388,7 @@
       align-content: start;
     }
     .strat-mode .strat-live-panel { display: grid; }
-    /* Premium (LAST) intraday evolution panel, center-right under the Live panel. */
+    /* Premium (BID) intraday evolution panel, center-right under the Live panel. */
     .premium-panel {
       position: fixed;
       right: 24px;
@@ -530,7 +530,10 @@
     </div>
   </aside>
   <aside id="strategyPanel" class="option-chain-panel strategy-panel" hidden>
-    <div class="chain-head"><div class="chain-title">Strategy</div></div>
+    <div class="chain-head"><div class="chain-title">Strategy</div>
+      <button id="startBtn" class="send-btn" type="button" title="Reset + escalera ATM 12 por lado de la expiracion mas cercana">START</button>
+      <span id="startStatus" class="send-status"></span>
+    </div>
     <div class="strat-item" data-strategy="short_straddle"><span class="chk"></span> Short Straddle</div>
     <div class="strat-item" data-strategy="short_strangle"><span class="chk"></span> Short Strangle</div>
     <div id="strategyLegs" class="strat-legs"></div>
@@ -578,6 +581,7 @@
       putsMissing: new Set([1215, 1235, 1245, 1265, 1275, 1285, 1295, 1305, 1315, 1325]),
     };
     const ACTIVE_STRATEGY_KEY = "tos_live_active_strategy";
+    const NEAR_ATM_LEVELS = 12;
     const state = { rows: [], symbol: "MU", file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null, payoffLoading: false, lastPayoffRefreshKey: null, premium: null, premiumPast: false, premiumDay: null, latestDay: null, hideUnderlying: false, premiumPct: false };
     const $ = id => document.getElementById(id);
 
@@ -703,22 +707,40 @@
       $("chainToggle").classList.toggle("active", show);
       if (show) renderOptionChain();
     }
+    function limitedNearAtmRows(rows, atm, levels = NEAR_ATM_LEVELS) {
+      const sorted = (rows || [])
+        .filter(r => Number.isFinite(Number(r[0])))
+        .slice()
+        .sort((a, b) => Number(a[0]) - Number(b[0]));
+      if (!sorted.length) return [];
+      const atmNum = Number(atm);
+      const atmIdx = Number.isFinite(atmNum)
+        ? sorted.reduce((best, row, i) => Math.abs(Number(row[0]) - atmNum) < Math.abs(Number(sorted[best][0]) - atmNum) ? i : best, 0)
+        : Math.floor(sorted.length / 2);
+      const target = levels * 2 + 1;
+      let lo = atmIdx - levels;
+      let hi = atmIdx + levels + 1;
+      if (lo < 0) { hi = Math.min(sorted.length, hi - lo); lo = 0; }
+      if (hi > sorted.length) { lo = Math.max(0, lo - (hi - sorted.length)); hi = sorted.length; }
+      const selected = sorted.slice(lo, hi);
+      return selected.length > target ? selected.slice(0, target) : selected;
+    }
     function nearAtmModel() {
       // Prefer the JSON exported by get_near_ATM_strikes.py; fall back to the embedded list.
       if (state.nearAtm && Array.isArray(state.nearAtm.strikes)) {
         const d = state.nearAtm;
         return {
           symbol: d.symbol, expiration: d.expiration, dte: d.dte, atm: d.atm, spot: d.spot,
-          rows: d.strikes.map(s => [s.strike, s.call, s.put]),
+          rows: limitedNearAtmRows(d.strikes.map(s => [s.strike, s.call, s.put]), d.atm),
         };
       }
       const yy = NEAR_ATM.expiration.slice(2).replace(/-/g, "");  // 260626
       return {
         symbol: NEAR_ATM.symbol, expiration: NEAR_ATM.expiration, dte: dteByDate(NEAR_ATM.expiration), atm: NEAR_ATM.atm, spot: NEAR_ATM.spot,
-        rows: NEAR_ATM.strikes.map(k => [
+        rows: limitedNearAtmRows(NEAR_ATM.strikes.map(k => [
           k, `.${NEAR_ATM.symbol}${yy}C${k}`,
           NEAR_ATM.putsMissing.has(k) ? null : `.${NEAR_ATM.symbol}${yy}P${k}`,
-        ]),
+        ]), NEAR_ATM.atm),
       };
     }
     function dteForExpiration(expiration) {
@@ -759,6 +781,7 @@
       try {
         const url = new URL("/api/near-atm", location.origin);
         if (expiration) url.searchParams.set("expiration", expiration);
+        url.searchParams.set("levels", NEAR_ATM_LEVELS);
         url.searchParams.set("ts", Date.now());
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -909,7 +932,7 @@
       } catch (err) { setPremium(null, past); }
     }
     function setPremium(d, past) {
-      // Premium (LAST) + session underlying are overlaid on the main chart (right Y axis).
+      // Premium (BID) + session underlying are overlaid on the main chart (right Y axis).
       const hasCall = d && d.call && Array.isArray(d.call.t) && d.call.t.length;
       const hasPut = d && d.put && Array.isArray(d.put.t) && d.put.t.length;
       state.premium = (hasCall || hasPut) ? d : null;
@@ -1042,6 +1065,19 @@
            <span id="sendStatus" class="send-status"></span>
          </div>`;
       loadPayoff(exp, k, payoffArgs);
+    }
+    async function startLadder() {
+      // Reset + anchor the ATM ladder (nearest expiration, 12 strikes each side) and write it to Excel.
+      const status = $("startStatus");
+      if (status) { status.textContent = "anclando..."; status.className = "send-status"; }
+      try {
+        const res = await fetch("/api/start", { cache: "no-store" });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        if (status) { status.textContent = `OK ${data.expiration} ATM ${data.atm} - ${data.contracts} contratos`; status.className = "send-status ok"; }
+      } catch (err) {
+        if (status) { status.textContent = `ERROR ${err.message || "error"}`; status.className = "send-status err"; }
+      }
     }
     async function sendToExcel() {
       const ctx = state.sendCtx;
@@ -1313,7 +1349,7 @@
       loadNearAtm();
     }
     function initPremiumPanel() {
-      // Premium (LAST) panel lives on the Spot page, not in STRAT.
+      // Premium (BID) panel lives on the Spot page, not in STRAT.
       if (state.stratMode) return;
       $("premiumPanel").hidden = false;
       $("premiumDay").addEventListener("change", ev => loadPremiumStrikes(ev.target.value));
@@ -1534,7 +1570,7 @@
         line: { color: "#22d3ee", width: 3 },
         hovertemplate: "%{x}<br>Bid: %{y:,.2f}<extra></extra>"
       };
-      // Premium (LAST) overlay: call and put share one right axis.
+      // Premium (BID) overlay: call and put share one right axis.
       const premiumTraces = [];
       const premiumX = [];
       const y2Vals = [];
@@ -1544,20 +1580,20 @@
       if (hasCall) {
         const cy = toPct(p.call.last);
         premiumTraces.push({ x: p.call.t, y: cy, type: "scatter", mode: "lines", name: `call ${p.strike}`,
-          yaxis: "y2", line: { color: "rgba(0, 230, 118, 0.5)", width: 1, dash: "solid" }, hovertemplate: `%{x}<br>call ${yfmt}<extra></extra>` });
+          yaxis: "y2", line: { color: "rgba(0, 230, 118, 0.3)", width: 1, dash: "solid" }, hovertemplate: `%{x}<br>call ${yfmt}<extra></extra>` });
         premiumX.push(...p.call.t); y2Vals.push(...cy);
       }
       if (hasPut) {
         const py = toPct(p.put.last);
         premiumTraces.push({ x: p.put.t, y: py, type: "scatter", mode: "lines", name: `put ${p.strike}`,
-          yaxis: "y2", line: { color: "rgba(255, 59, 79, 0.5)", width: 1, dash: "solid" }, hovertemplate: `%{x}<br>put ${yfmt}<extra></extra>` });
+          yaxis: "y2", line: { color: "rgba(255, 59, 79, 0.3)", width: 1, dash: "solid" }, hovertemplate: `%{x}<br>put ${yfmt}<extra></extra>` });
         premiumX.push(...p.put.t); y2Vals.push(...py);
       }
       const premiumSum = hasCall && hasPut ? premiumSumSeries(p.call, p.put) : null;
       if (premiumSum) {
         const sy = toPct(premiumSum.y);
         premiumTraces.push({ x: premiumSum.t, y: sy, type: "scatter", mode: "lines", name: `call+put ${p.strike}`,
-          yaxis: "y2", line: { color: "#facc15", width: 2.6 }, hovertemplate: `%{x}<br>call + put ${yfmt}<extra></extra>` });
+          yaxis: "y2", line: { color: "#2563ff", width: 2.6 }, hovertemplate: `%{x}<br>call + put ${yfmt}<extra></extra>` });
         premiumX.push(...premiumSum.t); y2Vals.push(...sy);
       }
       const xRange = withRightPad(selectedSessionRange() || paddedTimeRange([...x, ...premiumX]));
@@ -1654,6 +1690,7 @@
     }
     $("chainToggle").addEventListener("click", openStratTab);
     document.addEventListener("click", ev => {
+      if (ev.target.closest("#startBtn")) { startLadder(); return; }
       if (ev.target.closest(".send-btn")) { sendToExcel(); return; }
       const ocRow = ev.target.closest("#optionChainRows tr");
       if (ocRow) { loadNearAtm(ocRow.dataset.expiration); return; }

@@ -9,8 +9,8 @@ the saved CSV. You can override it with --spot, or pull a live quote with --live
 
 Examples
 --------
-    python get_near_ATM_strikes.py 1                 # DTE = 1, 20 nearest strikes
-    python get_near_ATM_strikes.py 1 --count 30
+    python get_near_ATM_strikes.py 1                 # DTE = 1, 25 nearest strikes
+    python get_near_ATM_strikes.py 1 --levels 12
     python get_near_ATM_strikes.py --expiration 2026-06-26
     python get_near_ATM_strikes.py 1 --spot 1185.5
     python get_near_ATM_strikes.py 1 --live          # spot from yfinance
@@ -23,10 +23,11 @@ from pathlib import Path
 
 import pandas as pd
 
+from config import DEFAULT_LEVELS
+
 DATA_DIR = Path(__file__).resolve().parent / "data"
 OUTPUTS_DIR = Path(__file__).resolve().parent / "outputs"
 DEFAULT_TICKER = "MU"
-DEFAULT_LEVELS = 25  # strikes on EACH side of the ATM (so 25 below + ATM + 25 above)
 
 
 def dte_from_expiration(expiration: str) -> int | None:
