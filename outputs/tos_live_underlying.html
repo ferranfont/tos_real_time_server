@@ -2371,7 +2371,14 @@
       await loadText(await file.text(), "CSV");
     }
     async function loadHttpCsv() {
-      const res = await fetch(`/api/tos-live-csv?ticker=${encodeURIComponent(state.symbol)}&ts=${Date.now()}`, { cache: "no-store" });
+      // Underlying follows the selected session day (calendar), so a past day shows
+      // that day's recorded CSV; today stays live.
+      const url = new URL("/api/tos-live-csv", location.origin);
+      url.searchParams.set("ticker", state.symbol);
+      const day = currentDay();
+      if (day) url.searchParams.set("date", day);
+      url.searchParams.set("ts", Date.now());
+      const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await loadText(await res.text(), "HTTP CSV");
     }
@@ -2494,7 +2501,7 @@
       }
     });
     // Session day (calendar) changed: rebuild the ladder and refresh expirations + series.
-    $("strikeDay").addEventListener("change", () => { state.userRange = null; buildStrikeTable(true); refreshAnchorStatus(); saveChartState(); loadSessionExpirations(); });
+    $("strikeDay").addEventListener("change", () => { state.userRange = null; buildStrikeTable(true); refreshAnchorStatus(); saveChartState(); refreshFile(); loadSessionExpirations(); });
     // Expiration changed: re-fetch the selected contracts for the new expiration.
     $("strikeExp").addEventListener("change", () => { state.userRange = null; saveChartState(); reloadSeries(); });
     $("symbolSelect").addEventListener("change", ev => setTicker(ev.target.value));
