@@ -1,7 +1,7 @@
 """Project-level runtime defaults."""
 
 # Tickers to record. The first ticker is the dashboard default.
-TICKERS = ["NDX", "SPX", "MU", "SNDK"]
+TICKERS = ["NDX", "SPX", "MU", "SNDK", "WDC", "STX"]    # , "INTC"
 
 # Strikes on EACH side of the ATM for the STRAT near-ATM display: 12 below + ATM + 12 above.
 DEFAULT_LEVELS = 12

@@ -37,11 +37,14 @@ from config import TICKERS  # noqa: E402
 DATA_DIR = PROJECT_ROOT / "data"
 LOGOS_DIR = DATA_DIR / "logos"
 
-# Dominio de marca por simbolo. SPX es un indice: usamos S&P Global como marca.
+# Dominio de marca por simbolo. SPX/NDX son indices: usamos la marca del proveedor.
 SYMBOL_DOMAIN = {
     "SPX": "spglobal.com",
+    "NDX": "nasdaq.com",
     "MU": "micron.com",
     "SNDK": "sandisk.com",
+    "WDC": "westerndigital.com",
+    "STX": "seagate.com",
 }
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (logo-fetcher)"}
