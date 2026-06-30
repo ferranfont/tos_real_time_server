@@ -2456,10 +2456,22 @@
       } else {
         base = 4200; step = 10;  // fallback before any live data
       }
+      const N = 12;
+      // Drop stale selections from another ticker/scale (e.g. a 4200 placeholder strike
+      // left over on MU): far outside this ladder AND with no loaded data. Runs every
+      // render (before the rebuild short-circuit) so a lingering junk strike is removed.
+      if (spot != null && isFinite(spot)) {
+        const lo = base - N * step, hi = base + N * step, margin = N * step;
+        const kept = state.selected.filter(s => {
+          const k = Number(s.strike);
+          if (k >= lo - margin && k <= hi + margin) return true;   // within ~2x the ladder
+          return !!state.series[seriesKey(s.strike)];              // or has loaded data
+        });
+        if (kept.length !== state.selected.length) { state.selected = kept; saveChartState(); }
+      }
       const key = `${state.symbol}|${dateEl ? dateEl.value : ""}|${base}|${step}`;
       if (!force && key === state.strikeKey) return;  // keep user toggles between live ticks
       state.strikeKey = key;
-      const N = 12;
       const cell = side => `<td><span class="strike-opt is-short" data-side="${side}"><span class="strike-chk"></span><span class="strike-ls">S</span></span></td>`;
       let html = "";
       for (let i = N; i >= -N; i--) {
