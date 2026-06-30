@@ -36,11 +36,12 @@
       text-rendering: optimizeLegibility;
     }
     .stage { position: fixed; inset: 0; background: transparent; }
-    #chart { position: absolute; inset: 0; width: 100vw; height: 100vh; }
+    #chart { position: absolute; inset: 0 18px 0 0; }
+    .app-shell { max-width: calc(100vw - 24px); }
     .topbar {
       position: fixed;
       top: 38px;
-      left: 40px;
+      left: 52px;
       right: 32px;
       z-index: 20;
       display: flex;
@@ -55,22 +56,20 @@
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      border: 1px solid #1d2634;
-      background: rgba(5, 8, 13, 0.80);
-      border-radius: 999px;
-      padding: 4px;
-      box-shadow: 0 12px 34px rgba(0,0,0,0.32);
-      backdrop-filter: blur(10px);
+      border: 0;
+      background: transparent;
+      border-radius: 0;
+      padding: 0;
+      box-shadow: none;
+      backdrop-filter: none;
     }
     .pill, .file-btn, select {
-      height: 26px;
-      border: 0;
-      border-radius: 999px;
-      padding: 0 12px;
-      background: transparent;
-      color: #cbd5e1;
+      height: 30px;
+      border-radius: 8px;
+      padding: 0 14px;
+      color: #e0f7ff;
       font: inherit;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 800;
       cursor: pointer;
       text-decoration: none;
@@ -78,22 +77,27 @@
       align-items: center;
       justify-content: center;
     }
-    .pill.active, .file-btn.active {
-      background: #dbeafe;
-      color: #0f172a;
+    .pill, .file-btn {
+      border: 1px solid rgba(34,211,238,.42);
+      background: rgba(5,8,13,.82);
     }
-    .pill:hover, .file-btn:hover { background: rgba(219, 234, 254, 0.12); color: #fff; }
-    .pill.active:hover, .file-btn.active:hover { background: #dbeafe; color: #0f172a; }
-    select { width: 74px; outline: none; appearance: none; text-align: center; }
+    .pill:hover, .file-btn:hover,
+    .pill.active, .file-btn.active,
+    .pill.active:hover, .file-btn.active:hover {
+      border-color: var(--green);
+      background: rgba(0,230,118,.15);
+      color: #fff;
+    }
+    select { width: 74px; outline: none; appearance: none; text-align: center; border: 0; background: transparent; }
     input[type=file] { display: none; }
     .spot-card {
       position: fixed;
       left: auto;
       right: 24px;
-      bottom: 58px;
+      top: 78px;
       z-index: 22;
-      width: 230px;
-      min-width: 230px;
+      width: 300px;
+      min-width: 300px;
       border: 1px solid rgba(34, 211, 238, 0.36);
       background: linear-gradient(180deg, rgba(5,8,13,.86), rgba(5,8,13,.66));
       border-radius: 14px;
@@ -101,8 +105,6 @@
       box-shadow: 0 20px 45px rgba(0,0,0,0.36);
       backdrop-filter: blur(14px);
     }
-    .spot-k { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
-    .spot-symbol { color: #fff; font-weight: 900; margin-right: 7px; }
     .spot-v {
       margin-top: 4px;
       color: var(--cyan);
@@ -114,6 +116,76 @@
     }
     .spot-meta { margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 11px; font-weight: 700; }
     .chg.pos { color: var(--green); } .chg.neg { color: var(--red); }
+    /* Strike table card: docked under the spot card, all light grey. */
+    .strike-card {
+      position: fixed;
+      right: 24px;
+      top: 184px;
+      z-index: 21;
+      width: 300px;
+      min-width: 300px;
+      max-height: 500px;
+      overflow: auto;
+      border: 1px solid rgba(148, 163, 184, 0.30);
+      background: linear-gradient(180deg, rgba(5,8,13,.86), rgba(5,8,13,.66));
+      border-radius: 14px;
+      padding: 12px 14px 10px;
+      box-shadow: 0 20px 45px rgba(0,0,0,0.36);
+      backdrop-filter: blur(14px);
+      scrollbar-width: thin;
+      scrollbar-color: rgba(148, 163, 184, 0.16) transparent;
+    }
+    .strat-mode .strike-card, .chain-visible .strike-card { display: none; }
+    .strike-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 6px; margin-bottom: 8px; }
+    .strike-brand { flex: 1 1 100%; display: flex; align-items: center; gap: 7px; min-height: 24px; }
+    .strike-title-logo { width: 22px; height: 22px; border-radius: 5px; object-fit: contain; background: rgba(255,255,255,.92); padding: 1px; flex: 0 0 auto; }
+    .strike-title-logo[hidden] { display: none; }
+    .strike-title { color: #22d3ee; font-size: 16px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; line-height: 1; }
+    /* Two controls share one row: expiration (select) + session day (calendar). */
+    .strike-ctl {
+      flex: 1 1 0; min-width: 0; appearance: auto; text-align: left;
+      background: #1f2933; border: 1px solid rgba(148,163,184,.42);
+      color: #d8dee9; border-radius: 6px; font-size: 12px; padding: 5px 6px;
+      color-scheme: dark; font-weight: 600;
+    }
+    .strike-ctl:focus {
+      border-color: rgba(34,211,238,.58);
+      box-shadow: 0 0 0 2px rgba(34,211,238,.10);
+    }
+    #strikeExp { flex: 1 1 0; }
+    #strikeDay { flex: 1 1 0; }
+    .strike-ctl option { background: #1f2933; color: #d1d5db; font-weight: 700; }
+    .strike-ctl option:checked { background: #334155; color: #f8fafc; }
+    .strike-table { width: 100%; border-collapse: collapse; font-size: 12px; color: #cbd5e1; }
+    .strike-table th {
+      color: #94a3b8; font-size: 10px; font-weight: 800; text-transform: uppercase;
+      text-align: center; padding: 4px 2px 6px; border-bottom: 1px solid rgba(148,163,184,.22);
+    }
+    .strike-table th:first-child { text-align: left; }
+    .strike-table td { padding: 0px 2px; line-height: 1.15; text-align: center; }
+    .strike-table tr { height: 18px; }
+    .strike-table td.strike-val { text-align: left; color: #cbd5e1; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .strike-table tr.atm .strike-val { color: #ffd400; font-weight: 900; }
+    .strike-opt { display: inline-flex; align-items: center; gap: 6px; justify-content: center; }
+    /* Custom checkbox: empty grey box; when .on shows a check, colored by L/S. */
+    .strike-chk {
+      position: relative; display: inline-block; width: 14px; height: 14px;
+      border: 1.5px solid #94a3b8; border-radius: 4px; cursor: pointer; flex: 0 0 auto;
+    }
+    .strike-opt.on .strike-chk::after {
+      content: "\2713"; position: absolute; inset: -2px 0 0 0;
+      text-align: center; font-size: 12px; line-height: 14px; font-weight: 900;
+    }
+    .strike-opt.on.is-long  .strike-chk { border-color: var(--green); }
+    .strike-opt.on.is-long  .strike-chk::after { color: var(--green); }
+    .strike-opt.on.is-short .strike-chk { border-color: var(--red); }
+    .strike-opt.on.is-short .strike-chk::after { color: var(--red); }
+    .strike-ls {
+      display: inline-block; width: 12px; text-align: center;
+      color: #cbd5e1; font-weight: 800; cursor: pointer; user-select: none;
+    }
+    .strike-opt.on.is-long  .strike-ls { color: var(--green); }
+    .strike-opt.on.is-short .strike-ls { color: var(--red); }
     .chain-visible .side-panel { display: none; }
     .option-chain-panel {
       position: fixed;
@@ -225,6 +297,10 @@
     .send-status { font-size: 11px; color: var(--muted); font-weight: 600; }
     .send-status.ok { color: var(--green); }
     .send-status.err { color: var(--red); }
+    .top-start { display: none; }
+    .strat-mode .top-start { display: inline-flex; }
+    .top-start-status { display: none; font-size: 11px; color: var(--muted); font-weight: 700; margin: 0 4px; }
+    .strat-mode .top-start-status { display: inline-flex; align-items: center; }
     /* Payoff chart: STRAT top work area, with P&L docked below it. */
     .payoff-chart {
       position: fixed;
@@ -250,8 +326,9 @@
       left: 772px;
       right: 24px;
       top: calc(96px + 54vh + 16px);
+      bottom: 24px;
       width: auto;
-      max-height: calc(100vh - 96px - 54vh - 40px);
+      min-height: 260px;
       overflow: auto;
       z-index: 23;
       border: 1px solid rgba(34, 211, 238, 0.28);
@@ -270,7 +347,7 @@
     .sum-v.pos { color: var(--green); }
     .sum-v.neg { color: var(--red); }
     .sum-v.be { color: var(--cyan); font-size: 15px; grid-column: 1 / -1; }
-    .sum-foot { color: #cbd5e1; font-size: 13px; margin-top: 14px; line-height: 1.65; border-top: 1px solid rgba(203,213,225,.18); padding-top: 10px; }
+    .sum-foot { color: #cbd5e1; font-size: 13px; margin-top: 6px; line-height: 1.65; border-top: 0; padding-top: 0; }
 
     .premium-box { display: inline-grid; grid-template-columns: auto auto; gap: 7px 18px; align-items: baseline; margin: 14px 0 4px; padding: 10px 12px; border: 1px solid rgba(34,211,238,.42); border-radius: 8px; background: rgba(5,8,13,.55); font-variant-numeric: tabular-nums; }
     .premium-box .premium-title { grid-column: 1 / -1; color: #fff; font-size: 12px; font-weight: 900; }
@@ -299,10 +376,10 @@
       top: calc(96px + 178px + 16px);
       bottom: auto;
       height: calc(100vh - 96px - 178px - 40px);
-      width: 340px;
+      width: 280px;
     }
     .strat-mode .near-atm-panel {
-      left: 388px;
+      left: 328px;
       right: auto;
       top: calc(96px + 178px + 16px);
       bottom: auto;
@@ -388,24 +465,13 @@
       align-content: start;
     }
     .strat-mode .strat-live-panel { display: grid; }
-    /* Premium (BID) intraday evolution panel, center-right under the Live panel. */
-    .premium-panel {
-      position: fixed;
-      right: 24px;
-      top: 96px;
-      z-index: 24;
-      display: flex;
-      gap: 8px;
-    }
-    .premium-panel[hidden] { display: none; }
-    .strat-mode .premium-panel { display: none; }   /* premium overlay lives on the Spot page */
     .ul-toggle {
       position: fixed;
       right: 24px;
-      top: calc(39vh - 44px);
+      top: 704px;
       bottom: auto;
       z-index: 25;
-      width: 230px;
+      width: 142px;
       height: 30px;
       border: 1px solid rgba(34,211,238,.42);
       background: rgba(5,8,13,.82);
@@ -416,18 +482,15 @@
       cursor: pointer; letter-spacing: .03em;
     }
     .ul-toggle:hover { border-color: var(--green); background: rgba(0,230,118,.15); color: #fff; }
-    .ul-toggle.off { border-color: rgba(255,59,79,.5); color: #ffd9de; }
+    .ul-toggle.off { border-color: rgba(0,230,118,.55); background: rgba(0,230,118,.10); color: #eafff4; }
+    .ul-toggle.off:hover { border-color: var(--green); background: rgba(0,230,118,.18); color: #fff; }
     .ul-toggle[hidden] { display: none; }
     .strat-mode .ul-toggle { display: none; }
-    .pct-toggle { top: calc(39vh - 82px); bottom: auto; }
-    .pct-toggle.on { border-color: var(--green); background: rgba(0,230,118,.18); color: #fff; }
-    .premium-select {
-      height: 28px; width: 120px;
-      background: rgba(5,8,13,.78); color: #dbeafe;
-      border: 1px solid #1d2634; border-radius: 8px;
-      font: inherit; font-size: 12px; font-weight: 700; padding: 0 8px;
-      appearance: none; cursor: pointer; text-align: center;
-    }
+    .mode-pills { display: none; }
+    .right-tools select { display: none; }
+    .pct-toggle { top: 704px; right: 182px; bottom: auto; width: 142px; }
+    .ul-toggle.on { border-color: var(--green); background: rgba(0,230,118,.18); color: #fff; }
+    .session-toggle { top: 746px; right: 182px; width: 142px; }
     .status {
       position: fixed;
       right: 24px;
@@ -436,13 +499,14 @@
       color: var(--muted);
       font-size: 11px;
       font-weight: 800;
-      background: rgba(5,8,13,.78);
-      border: 1px solid #1d2634;
-      border-radius: 999px;
-      padding: 8px 12px;
-      pointer-events: auto;
-      text-decoration: none;
-      cursor: pointer;
+      padding: 7px 10px;
+      border: 1px solid rgba(34,211,238,.25);
+      border-radius: 8px;
+      background: rgba(5,8,13,.68);
+      max-width: 40vw;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .status.live { color: var(--green); border-color: rgba(0,230,118,.35); }
     .status.err { color: var(--red); border-color: rgba(255,59,79,.35); }
@@ -475,46 +539,37 @@
     <div class="mode-pills"><button class="pill active" type="button">Spot</button><button class="pill" type="button">UNDERLYING_BID</button></div>
     <div class="right-tools">
       <select id="symbolSelect" aria-label="Simbolo"><option>MU</option></select>
-      <button id="chainToggle" class="file-btn" type="button">STRAT</button>
+      <button id="startBtn" class="file-btn top-start" type="button" title="Reset + escalera ATM 12 por lado de la expiracion mas cercana">START</button>
+      <span id="startStatus" class="top-start-status"></span>
+      <button id="chainToggle" class="file-btn" type="button">Strat</button>
       <input id="csvInput" type="file" accept=".csv,text/csv">
     </div>
   </div>
 
   <aside class="spot-card">
-    <div class="spot-k"><span class="spot-symbol" id="spotSymbol">MU</span> UNDERLYING_BID</div>
     <div class="spot-v" id="spotValue">--</div>
     <div class="spot-meta"><span id="spotTime">sin lectura</span><span id="spotChange" class="chg"></span></div>
   </aside>
 
-  <aside class="side-panel">
-    <div class="side-title">Live</div>
-    <div class="side-row"><span class="label">spot</span><span class="value" id="sideSpot">--</span></div>
-    <div class="side-row"><span class="label">last tick</span><span class="value" id="sideTime">--</span></div>
-    <div class="side-row"><span class="label">samples</span><span class="value" id="sideSamples">0</span></div>
-    <div class="side-sep"></div>
-    <div class="side-row"><span class="label">bid</span><span class="value" id="sideBid">--</span></div>
-    <div class="side-row"><span class="label">ask</span><span class="value" id="sideAsk">--</span></div>
-    <div class="side-row"><span class="label">mark</span><span class="value" id="sideMark">--</span></div>
-    <div class="side-row"><span class="label">volume</span><span class="value" id="sideVol">--</span></div>
+  <aside class="strike-card" id="strikeCard">
+    <div class="strike-head">
+      <span class="strike-brand"><img id="strikeTitleLogo" class="strike-title-logo" alt="" hidden><span class="strike-title" id="strikeTitle">NDX</span></span>
+      <select id="strikeExp" class="strike-ctl" aria-label="Vencimiento" title="Vencimiento (expiracion)"></select>
+      <input type="date" id="strikeDay" class="strike-ctl" aria-label="Sesion" title="Dia de sesion">
+    </div>
+    <table class="strike-table">
+      <thead><tr><th>Strike</th><th>PUT</th><th>CALL</th></tr></thead>
+      <tbody id="strikeRows"></tbody>
+    </table>
   </aside>
-  <aside class="strat-live-panel">
-    <div class="side-title">Live</div>
-    <div class="side-row"><span class="label">spot</span><span class="value" id="stratSideSpot">--</span></div>
-    <div class="side-row"><span class="label">last tick</span><span class="value" id="stratSideTime">--</span></div>
-    <div class="side-row"><span class="label">samples</span><span class="value" id="stratSideSamples">0</span></div>
-    <div class="side-sep"></div>
-    <div class="side-row"><span class="label">bid</span><span class="value" id="stratSideBid">--</span></div>
-    <div class="side-row"><span class="label">ask</span><span class="value" id="stratSideAsk">--</span></div>
-    <div class="side-row"><span class="label">mark</span><span class="value" id="stratSideMark">--</span></div>
-    <div class="side-row"><span class="label">volume</span><span class="value" id="stratSideVol">--</span></div>
-  </aside>
+
   <button id="togglePct" class="ul-toggle pct-toggle" type="button" hidden>Primas %</button>
-  <button id="toggleUnderlying" class="ul-toggle" type="button" hidden>Ocultar subyacente</button>
-  <a id="status" class="status" href="/api/tos-live-csv" target="_blank" rel="noopener">esperando CSV</a>
+  <button id="toggleUnderlying" class="ul-toggle" type="button" hidden>Hide Spot</button>
+  <button id="toggleSession" class="ul-toggle session-toggle" type="button" hidden>RTH</button>
   <aside id="optionChainPanel" class="option-chain-panel" hidden>
-    <div class="chain-head"><div class="chain-title">Option Chain</div><div class="chain-meta">MU</div></div>
+    <div class="chain-head"><div class="chain-title">Option Chain</div><div class="chain-meta" id="optionChainMeta">MU</div></div>
     <table class="chain-table">
-      <thead><tr><th>Expiration</th><th>DTE</th><th>Calls</th><th>Puts</th><th></th></tr></thead>
+      <thead><tr><th>Expiration</th><th>DTE</th><th></th></tr></thead>
       <tbody id="optionChainRows"></tbody>
     </table>
   </aside>
@@ -530,19 +585,12 @@
     </div>
   </aside>
   <aside id="strategyPanel" class="option-chain-panel strategy-panel" hidden>
-    <div class="chain-head"><div class="chain-title">Strategy</div>
-      <button id="startBtn" class="send-btn" type="button" title="Reset + escalera ATM 12 por lado de la expiracion mas cercana">START</button>
-      <span id="startStatus" class="send-status"></span>
-    </div>
+    <div class="chain-head"><div class="chain-title">Strategy</div></div>
     <div class="strat-item" data-strategy="short_straddle"><span class="chk"></span> Short Straddle</div>
     <div class="strat-item" data-strategy="short_strangle"><span class="chk"></span> Short Strangle</div>
     <div id="strategyLegs" class="strat-legs"></div>
   </aside>
   <div id="payoffChart" class="payoff-chart" hidden></div>
-  <div id="premiumPanel" class="premium-panel" hidden>
-    <select id="premiumDay" class="premium-select" title="Sesion"></select>
-    <select id="premiumStrike" class="premium-select" title="Strike"></select>
-  </div>
   <aside id="strategySummary" class="summary-panel" hidden>
     <div id="summaryBody"></div>
   </aside>
@@ -581,8 +629,26 @@
       putsMissing: new Set([1215, 1235, 1245, 1265, 1275, 1285, 1295, 1305, 1315, 1325]),
     };
     const ACTIVE_STRATEGY_KEY = "tos_live_active_strategy";
+    const LAST_SYMBOL_KEY = "tos_live_last_symbol_v2";
+    const RANGE_MODE_KEY = "tos_live_range_mode";
     const NEAR_ATM_LEVELS = 12;
-    const state = { rows: [], symbol: "MU", file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null, payoffLoading: false, lastPayoffRefreshKey: null, premium: null, premiumPast: false, premiumDay: null, latestDay: null, hideUnderlying: false, premiumPct: false };
+    function initialSymbol() {
+      const querySymbol = new URLSearchParams(location.search).get("symbol");
+      if (querySymbol) return querySymbol.toUpperCase();
+      try {
+        const saved = localStorage.getItem(LAST_SYMBOL_KEY);
+        if (saved) return saved.toUpperCase();
+      } catch (_) {}
+      return "NDX";
+    }
+    function initialRangeMode() {
+      try {
+        const saved = localStorage.getItem(RANGE_MODE_KEY);
+        if (saved === "RTH" || saved === "ETH") return saved;
+      } catch (_) {}
+      return null;
+    }
+    const state = { rows: [], symbol: initialSymbol(), file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null, payoffLoading: false, lastPayoffRefreshKey: null, premium: null, premiumPast: false, premiumDay: null, selected: [], series: {}, latestDay: null, hideUnderlying: false, premiumPct: false, expirations: null, tickers: [], rangeMode: initialRangeMode(), chartConfig: { use_rth_only: true, rth_start_bcn: "15:30", rth_end_bcn: "22:50", rth_timezone: "BCN" }, chartRangeKey: "" };
     const $ = id => document.getElementById(id);
 
     function parseCsv(text) {
@@ -625,6 +691,25 @@
       const parts = String(dateText || "").split("-").map(Number);
       if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return null;
       return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+    function formatEuropeanDate(date) {
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = String(date.getFullYear());
+      return `${day}/${month}/${year}`;
+    }
+    function formatShortExpiration(expiration) {
+      const text = String(expiration || "");
+      const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      return match ? `${match[1].slice(2)}-${match[2]}-${match[3]}` : text;
+    }
+    function parseDateInput(value) {
+      const text = String(value || "").trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+      const euro = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (!euro) return null;
+      const [, day, month, year] = euro;
+      return `${year}-${month}-${day}`;
     }
     function dteByDate(expiration) {
       const expDate = parseLocalDate(expiration);
@@ -694,10 +779,60 @@
     }
 
 
-    function renderOptionChain() {
-      $("optionChainRows").innerHTML = OPTION_CHAIN.map(([expiration, dte, calls, puts]) =>
-        `<tr class="oc-row" data-expiration="${expiration}" data-dte="${dteByDate(expiration) ?? dte}"><td>${expiration}</td><td>${dteByDate(expiration) ?? dte}</td><td>${nf0.format(calls)}</td><td>${nf0.format(puts)}</td><td class="chk-cell"><span class="chk"></span></td></tr>`
-      ).join("");
+    function optionChainSource() {
+      if (state.expirations && state.expirations.length) {
+        return state.expirations.map(e => [e.expiration, e.dte, "-", "-"]);
+      }
+      if (state.symbol === NEAR_ATM.symbol) {
+        return OPTION_CHAIN.map(([exp, dte, calls, puts]) => [exp, dteByDate(exp) ?? dte, calls, puts]);
+      }
+      return [];
+    }
+    function renderStrikeExpirationSelect(message) {
+      const sel = $("strikeDate");
+      if (!sel) return;
+      const rows = optionChainSource();
+      const previous = sel.value;
+      if (!rows.length) {
+        sel.disabled = true;
+        sel.innerHTML = `<option value="">${esc(message || state.expirationsError || "Cargando...")}</option>`;
+        return;
+      }
+      const selected = rows.some(([expiration]) => expiration === previous) ? previous : rows[0][0];
+      sel.disabled = false;
+      sel.innerHTML = rows.map(([expiration, dte]) => {
+        const dteText = dte === 0 ? "0" : (dte || "--");
+        return `<option value="${esc(expiration)}" ${expiration === selected ? "selected" : ""}>${esc(expiration)} - DTE ${esc(dteText)}</option>`;
+      }).join("");
+    }
+    function renderOptionChain(message) {
+      const meta = $("optionChainMeta");
+      if (meta) meta.textContent = state.symbol;
+      const rows = optionChainSource();
+      $("optionChainRows").innerHTML = rows.length
+        ? rows.map(([expiration, dte, calls, puts]) =>
+            `<tr class="oc-row" data-expiration="${expiration}" data-dte="${dte}"><td>${expiration}</td><td>${dte}</td><td class="chk-cell"><span class="chk"></span></td></tr>`
+          ).join("")
+        : `<tr><td colspan="3">${esc(message || state.expirationsError || "Cargando...")}</td></tr>`;
+      renderStrikeExpirationSelect(message);
+    }
+    async function loadExpirations() {
+      const symbol = state.symbol;
+      state.expirations = null;
+      state.expirationsError = null;
+      renderOptionChain("Cargando...");
+      try {
+        const r = await (await fetch(`/api/expirations?ticker=${encodeURIComponent(symbol)}&ts=${Date.now()}`, { cache: "no-store" })).json();
+        if (symbol !== state.symbol) return;
+        state.expirations = r.expirations || [];
+        state.expirationsError = state.expirations.length ? null : (r.error || "Sin expiraciones");
+        renderOptionChain();
+      } catch (err) {
+        if (symbol !== state.symbol) return;
+        state.expirations = [];
+        state.expirationsError = "Sin expiraciones";
+        renderOptionChain();
+      }
     }
     function toggleOptionChain() {
       const panel = $("optionChainPanel");
@@ -726,7 +861,6 @@
       return selected.length > target ? selected.slice(0, target) : selected;
     }
     function nearAtmModel() {
-      // Prefer the JSON exported by get_near_ATM_strikes.py; fall back to the embedded list.
       if (state.nearAtm && Array.isArray(state.nearAtm.strikes)) {
         const d = state.nearAtm;
         return {
@@ -734,14 +868,17 @@
           rows: limitedNearAtmRows(d.strikes.map(s => [s.strike, s.call, s.put]), d.atm),
         };
       }
-      const yy = NEAR_ATM.expiration.slice(2).replace(/-/g, "");  // 260626
-      return {
-        symbol: NEAR_ATM.symbol, expiration: NEAR_ATM.expiration, dte: dteByDate(NEAR_ATM.expiration), atm: NEAR_ATM.atm, spot: NEAR_ATM.spot,
-        rows: limitedNearAtmRows(NEAR_ATM.strikes.map(k => [
-          k, `.${NEAR_ATM.symbol}${yy}C${k}`,
-          NEAR_ATM.putsMissing.has(k) ? null : `.${NEAR_ATM.symbol}${yy}P${k}`,
-        ]), NEAR_ATM.atm),
-      };
+      if (state.symbol === NEAR_ATM.symbol) {
+        const yy = NEAR_ATM.expiration.slice(2).replace(/-/g, "");
+        return {
+          symbol: NEAR_ATM.symbol, expiration: NEAR_ATM.expiration, dte: dteByDate(NEAR_ATM.expiration), atm: NEAR_ATM.atm, spot: NEAR_ATM.spot,
+          rows: limitedNearAtmRows(NEAR_ATM.strikes.map(k => [
+            k, `.${NEAR_ATM.symbol}${yy}C${k}`,
+            NEAR_ATM.putsMissing.has(k) ? null : `.${NEAR_ATM.symbol}${yy}P${k}`,
+          ]), NEAR_ATM.atm),
+        };
+      }
+      return { symbol: state.symbol, expiration: "--", dte: null, atm: "--", spot: null, rows: [] };
     }
     function dteForExpiration(expiration) {
       const dateDte = dteByDate(expiration);
@@ -764,11 +901,13 @@
     function renderNearAtm() {
       const m = nearAtmModel();
       const fmtK = k => Number.isInteger(k) ? k : String(k);
-      $("nearAtmRows").innerHTML = m.rows.map(([k, call, put]) =>
-        `<tr class="${k === m.atm ? "atm" : ""}" data-strike="${k}"><td>${esc(call || "-")}</td><td><span class="strike-pick"><span class="chk"></span><span>${fmtK(k)}</span><span class="chk"></span></span></td><td>${esc(put || "-")}</td></tr>`
-      ).join("");
+      $("nearAtmRows").innerHTML = m.rows.length
+        ? m.rows.map(([k, call, put]) =>
+            `<tr class="${k === m.atm ? "atm" : ""}" data-strike="${k}"><td>${esc(call || "-")}</td><td><span class="strike-pick"><span class="chk"></span><span>${fmtK(k)}</span><span class="chk"></span></span></td><td>${esc(put || "-")}</td></tr>`
+          ).join("")
+        : `<tr><td colspan="3">Sin strikes para ${esc(state.symbol)}</td></tr>`;
       const dte = m.dte ?? dteForExpiration(m.expiration);
-      $("nearAtmMeta").textContent = `${m.expiration} - DTE ${dte} - ATM ${fmtK(m.atm)}`;
+      $("nearAtmMeta").textContent = `${m.expiration} - DTE ${dte ?? "--"} - ATM ${fmtK(m.atm)}`;
       centerAtmRow();
     }
     function markOcRow(expiration) {
@@ -777,16 +916,19 @@
       if (row) { const c = row.querySelector(".chk"); if (c) c.classList.add("on"); }
     }
     async function loadNearAtm(expiration) {
-      // Ask the server to compute the near-ATM strikes for the chosen expiration.
+      const symbol = state.symbol;
       try {
         const url = new URL("/api/near-atm", location.origin);
+        url.searchParams.set("ticker", symbol);
         if (expiration) url.searchParams.set("expiration", expiration);
         url.searchParams.set("levels", NEAR_ATM_LEVELS);
         url.searchParams.set("ts", Date.now());
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        state.nearAtm = await res.json();
-        state.selectedStrike = null;  // strike picked for the old expiration no longer applies
+        const payload = await res.json();
+        if (symbol !== state.symbol) return;
+        state.nearAtm = payload;
+        state.selectedStrike = null;
         state.selectedPutStrike = null;
         state.selectedCallStrike = null;
         state.defaultStrategyApplied = false;
@@ -795,11 +937,23 @@
         if (applyDefaultShortStraddle()) return;
         renderStrategy();
         return;
-      } catch (err) { /* fall back to the static export below */ }
-      try {
-        const res = await fetch(`/outputs/near_atm_strikes.json?ts=${Date.now()}`, { cache: "no-store" });
-        if (res.ok) { state.nearAtm = await res.json(); state.selectedStrike = null; state.selectedPutStrike = null; state.selectedCallStrike = null; state.defaultStrategyApplied = false; renderNearAtm(); markOcRow(state.nearAtm.expiration); if (applyDefaultShortStraddle()) return; renderStrategy(); }
-      } catch (err) { /* keep embedded fallback */ }
+      } catch (err) { /* fall back to the static export below for MU only */ }
+      if (symbol !== state.symbol) return;
+      if (state.symbol === NEAR_ATM.symbol) {
+        try {
+          const res = await fetch(`/outputs/near_atm_strikes.json?ts=${Date.now()}`, { cache: "no-store" });
+          if (res.ok) { state.nearAtm = await res.json(); state.selectedStrike = null; state.selectedPutStrike = null; state.selectedCallStrike = null; state.defaultStrategyApplied = false; renderNearAtm(); markOcRow(state.nearAtm.expiration); if (applyDefaultShortStraddle()) return; renderStrategy(); }
+        } catch (err) { /* keep embedded fallback */ }
+      } else {
+        state.nearAtm = null;
+        state.selectedStrike = null;
+        state.selectedPutStrike = null;
+        state.selectedCallStrike = null;
+        state.defaultStrategyApplied = false;
+        renderNearAtm();
+        renderStrategy();
+        return;
+      }
       if (state.stratMode && !state.defaultStrategyApplied) {
         renderNearAtm();
         markOcRow(nearAtmModel().expiration);
@@ -887,57 +1041,75 @@
       markStrikeRow(tr);
       renderStrategy();
     }
-    async function initPremiumControls() {
+    async function initLatestSession() {
+      // No day/strike picker anymore; just learn the latest recorded session so
+      // premium-series knows whether a chosen date is "today" (keeps the live line).
+      if (state.stratMode) return;
       try {
-        const s = await (await fetch(`/api/live-sessions?ts=${Date.now()}`, { cache: "no-store" })).json();
+        const s = await (await fetch(`/api/live-sessions?ticker=${encodeURIComponent(state.symbol)}&ts=${Date.now()}`, { cache: "no-store" })).json();
         const days = s.days || [];
-        const daySel = $("premiumDay");
         state.latestDay = s.latest || days[days.length - 1] || null;
-        daySel.innerHTML = days.map(d => `<option value="${d}">${d}</option>`).join("");
-        daySel.value = state.latestDay || "";
-        await loadPremiumStrikes(daySel.value);
-      } catch (err) { setPremium(null); }
+      } catch (_) { state.latestDay = null; }
     }
-    async function loadPremiumStrikes(day) {
-      const strikeSel = $("premiumStrike");
+    // Current session day (calendar) and expiration (dropdown) chosen in the STRIKES card.
+    function currentDay() { return parseDateInput(($("strikeDay") && $("strikeDay").value)) || state.latestDay || ""; }
+    function currentExp() { return ($("strikeExp") && $("strikeExp").value) || ""; }
+    function seriesKey(strike) { return `${currentDay()}|${currentExp()}|${strike}`; }
+
+    // Fill the expiration dropdown for the current ticker + session day.
+    async function loadSessionExpirations() {
+      const sel = $("strikeExp");
+      if (!sel) return;
+      const prev = sel.value;
       try {
-        const url = new URL("/api/live-strikes", location.origin);
-        if (day) url.searchParams.set("date", day);
+        const url = new URL("/api/live-expirations", location.origin);
+        url.searchParams.set("ticker", state.symbol);
+        if (currentDay()) url.searchParams.set("date", currentDay());
         url.searchParams.set("ts", Date.now());
         const r = await (await fetch(url, { cache: "no-store" })).json();
-        const strikes = r.strikes || [];
-        strikeSel.innerHTML = strikes.map(k => `<option value="${k}">${k}</option>`).join("");
-        if (strikes.length) {
-          // default: ATM (closest to the session underlying), fallback to highest
-          strikeSel.value = (r.atm != null ? r.atm : strikes[strikes.length - 1]);
-          loadPremiumSeries(strikeSel.value, day);
-        } else {
-          setPremium(null);
-        }
-      } catch (err) { setPremium(null); }
+        const exps = r.expirations || [];
+        sel.innerHTML = exps.length
+          ? exps.map(e => {
+              const label = formatShortExpiration(e);
+              return `<option value="${esc(e)}">${esc(label)}</option>`;
+            }).join("")
+          : `<option value="">--</option>`;
+        sel.value = exps.includes(prev) ? prev : (exps[0] || "");
+      } catch (_) { sel.innerHTML = `<option value="">--</option>`; }
+      await reloadSeries();
     }
-    async function loadPremiumSeries(strike, day) {
-      state.premiumDay = day || null;
-      const past = !!(day && state.latestDay && day !== state.latestDay);
+
+    // Fetch (and cache) the premium series for one strike at the current day+expiration.
+    async function ensureSeries(strike) {
+      const key = seriesKey(strike);
+      if (key in state.series) return state.series[key];
       try {
         const url = new URL("/api/premium-series", location.origin);
+        url.searchParams.set("ticker", state.symbol);
         url.searchParams.set("strike", strike);
-        if (day) url.searchParams.set("date", day);
+        if (currentDay()) url.searchParams.set("date", currentDay());
+        if (currentExp()) url.searchParams.set("expiration", currentExp());
         url.searchParams.set("ts", Date.now());
-        const res = await fetch(url, { cache: "no-store" });
-        const data = await res.json();
-        if (data.error) { setPremium(null, past); return; }
-        state.userRange = null;   // new session/strike: fit the whole view
-        setPremium(data, past);
-      } catch (err) { setPremium(null, past); }
+        const data = await (await fetch(url, { cache: "no-store" })).json();
+        state.series[key] = (data && !data.error) ? data : null;
+      } catch (_) { state.series[key] = null; }
+      return state.series[key];
     }
-    function setPremium(d, past) {
-      // Premium (BID) + session underlying are overlaid on the main chart (right Y axis).
-      const hasCall = d && d.call && Array.isArray(d.call.t) && d.call.t.length;
-      const hasPut = d && d.put && Array.isArray(d.put.t) && d.put.t.length;
-      state.premium = (hasCall || hasPut) ? d : null;
-      // A past day shows that day's own underlying; today keeps the live underlying line.
-      state.premiumPast = !!(past && d && d.underlying && d.underlying.t && d.underlying.t.length);
+
+    // Toggle a contract (strike+side) in the multi-selection and refresh the chart.
+    async function selectContract(strike, side, on) {
+      const i = state.selected.findIndex(s => s.strike === strike && s.side === side);
+      if (on && i < 0) { state.selected.push({ strike, side }); await ensureSeries(strike); }
+      else if (!on && i >= 0) { state.selected.splice(i, 1); }
+      state.userRange = null;
+      if (!state.stratMode) render();
+    }
+
+    // Re-fetch series for every selected strike (e.g. session day or expiration changed).
+    async function reloadSeries() {
+      state.series = {};
+      const strikes = [...new Set(state.selected.map(s => s.strike))];
+      await Promise.all(strikes.map(ensureSeries));
       if (!state.stratMode) render();
     }
     function defaultAtmStrike() {
@@ -1074,7 +1246,12 @@
         const res = await fetch("/api/start", { cache: "no-store" });
         const data = await res.json();
         if (data.error) throw new Error(data.error);
-        if (status) { status.textContent = `OK ${data.expiration} ATM ${data.atm} - ${data.contracts} contratos`; status.className = "send-status ok"; }
+        if (status) {
+          const summary = data.tickers ? data.tickers[state.symbol] : data;
+          const prefix = summary ? `${state.symbol} ${summary.expiration} ATM ${summary.atm}` : state.symbol;
+          status.textContent = `OK ${prefix} - ${data.contracts || summary.contracts || 0} contratos`;
+          status.className = "send-status ok";
+        }
       } catch (err) {
         if (status) { status.textContent = `ERROR ${err.message || "error"}`; status.className = "send-status err"; }
       }
@@ -1086,6 +1263,7 @@
       if (status) { status.textContent = "enviando..."; status.className = "send-status"; }
       try {
         const url = new URL("/api/send-to-excel", location.origin);
+        url.searchParams.set("ticker", state.symbol);
         url.searchParams.set("expiration", ctx.expiration);
         url.searchParams.set("strategy", ctx.strategy || "short_straddle");
         if (ctx.strategy === "short_strangle") {
@@ -1109,6 +1287,7 @@
       state.payoffLoading = true;
       try {
         const url = new URL("/api/payoff", location.origin);
+        url.searchParams.set("ticker", state.symbol);
         url.searchParams.set("expiration", expiration);
         const strategy = options.strategy || state.strategy || "short_straddle";
         // For short_strangle with explicit strikes, don't send anchor (might not exist in chain)
@@ -1333,8 +1512,12 @@
       const fills = isStrangle ? [greenFill] : greenBands;
       Plotly.react("payoffChart", [redLFill, redRFill, redLGlow, redRGlow, ...fills, redL, redR, green, expiryHover, today], layout, { responsive: true, displayModeBar: false });
     }    function openStratTab() {
-      // Open a new tab (keeping the current one) showing the chain as a left sidebar.
-      window.open(`${location.pathname}?strat=1`, "_blank");
+      rememberSymbol(state.symbol);
+      const url = new URL(location.href);
+      url.searchParams.set("symbol", state.symbol);
+      if (url.searchParams.has("strat")) url.searchParams.delete("strat");
+      else url.searchParams.set("strat", "1");
+      window.location.href = `${url.pathname}?${url.searchParams.toString()}`;
     }
     function initStratMode() {
       if (!new URLSearchParams(location.search).has("strat")) return;
@@ -1343,22 +1526,22 @@
       $("optionChainPanel").hidden = false;
       $("nearAtmPanel").hidden = false;
       $("strategyPanel").hidden = false;
+      $("chainToggle").textContent = "Chart";
       $("chainToggle").classList.add("active");
       renderOptionChain();
+      loadExpirations();
       renderNearAtm();
       loadNearAtm();
     }
     function initPremiumPanel() {
-      // Premium (BID) panel lives on the Spot page, not in STRAT.
+      // Premium overlay lives on the Spot page, not in STRAT. The contract is now
+      // chosen from the STRIKES table, so there is no day/strike picker to wire.
       if (state.stratMode) return;
-      $("premiumPanel").hidden = false;
-      $("premiumDay").addEventListener("change", ev => loadPremiumStrikes(ev.target.value));
-      $("premiumStrike").addEventListener("change", ev => loadPremiumSeries(ev.target.value, $("premiumDay").value));
       const ulBtn = $("toggleUnderlying");
       ulBtn.hidden = false;
       ulBtn.addEventListener("click", () => {
         state.hideUnderlying = !state.hideUnderlying;
-        ulBtn.textContent = state.hideUnderlying ? "Mostrar subyacente" : "Ocultar subyacente";
+        ulBtn.textContent = state.hideUnderlying ? "Show Spot" : "Hide Spot";
         ulBtn.classList.toggle("off", state.hideUnderlying);
         if (state.rows.length) render();
       });
@@ -1370,7 +1553,14 @@
         pctBtn.classList.toggle("on", state.premiumPct);
         if (state.rows.length) render();
       });
-      initPremiumControls();
+      const sessionBtn = $("toggleSession");
+      sessionBtn.hidden = false;
+      updateSessionToggle();
+      sessionBtn.addEventListener("click", () => setRangeMode(state.rangeMode === "RTH" ? "ETH" : "RTH"));
+      const dayEl = $("strikeDay");
+      if (dayEl && !dayEl.value) dayEl.value = new Date().toLocaleDateString("en-CA"); // session day defaults to today
+      initLatestSession();
+      loadSessionExpirations();
     }
     function normalizedRows() {
       return state.rows.map(r => ({
@@ -1385,41 +1575,96 @@
       })).filter(r => r.symbol === state.symbol && r.spot != null);
     }
 
+    function rememberSymbol(symbol) {
+      if (!symbol) return;
+      try { localStorage.setItem(LAST_SYMBOL_KEY, String(symbol).toUpperCase()); } catch (_) {}
+    }
+    function updateStrikeTitle() {
+      const symbol = String(state.symbol || "--").toUpperCase();
+      const el = $("strikeTitle");
+      if (el) el.textContent = symbol;
+      const logo = $("strikeTitleLogo");
+      if (!logo || !state.symbol) return;
+      const src = `/data/logos/${encodeURIComponent(symbol)}.png?v=3`;
+      if (logo.getAttribute("src") !== src) logo.src = src;
+      logo.alt = symbol;
+      logo.onload = () => { logo.hidden = false; };
+      logo.onerror = () => { logo.hidden = true; };
+    }
     function updateSymbols() {
-      const symbols = [...new Set(state.rows.map(r => String(r.underlying_symbol || "").toUpperCase()).filter(Boolean))].sort();
-      if (!symbols.includes(state.symbol) && symbols.length) state.symbol = symbols[0];
-      const usable = symbols.length ? symbols : [state.symbol];
+      // Tickers come from config (/api/tickers), not from the loaded CSV.
+      const usable = (state.tickers && state.tickers.length) ? state.tickers : [state.symbol];
+      if (!usable.includes(state.symbol)) state.symbol = usable[0];
       $("symbolSelect").innerHTML = usable.map(s => `<option value="${esc(s)}" ${s === state.symbol ? "selected" : ""}>${esc(s)}</option>`).join("");
       $("tickerPills").innerHTML = usable.map(s => `<button class="pill ${s === state.symbol ? "active" : ""}" type="button" data-symbol="${esc(s)}">${esc(s)}</button>`).join("");
-      document.querySelectorAll("[data-symbol]").forEach(btn => btn.onclick = () => { state.symbol = btn.dataset.symbol; render(); });
+      updateStrikeTitle();
+      document.querySelectorAll("#tickerPills [data-symbol]").forEach(btn => btn.onclick = () => setTicker(btn.dataset.symbol));
     }
-
+    async function loadTickers() {
+      try {
+        const r = await (await fetch(`/api/tickers?ts=${Date.now()}`, { cache: "no-store" })).json();
+        if (r.tickers && r.tickers.length) {
+          state.tickers = r.tickers;
+          if (!r.tickers.includes(state.symbol)) state.symbol = r.tickers[0];
+          rememberSymbol(state.symbol);
+          updateSymbols();
+          loadExpirations();
+        }
+      } catch (err) { /* keep default NDX */ }
+    }
+    function setTicker(t) {
+      if (!t || t === state.symbol) return;
+      state.symbol = t;
+      rememberSymbol(state.symbol);
+      state.premium = null; state.expirations = null; state.expirationsError = null; state.nearAtm = null;
+      state.selectedStrike = null; state.selectedPutStrike = null; state.selectedCallStrike = null;
+      state.payoff = null; state.rows = []; state.userRange = null; state.premiumDay = null;
+      state.selected = []; state.series = {};
+      state.defaultStrategyApplied = false; state.sendCtx = null; state.lastPayoffRefreshKey = null;
+      updateSymbols();
+      if (state.stratMode) {
+        renderOptionChain("Cargando...");
+        renderNearAtm();
+        renderSummary(null);
+        drawPayoff(null);
+        renderStrategy();
+      }
+      refreshFile();
+      loadExpirations();
+      if (state.stratMode) { loadNearAtm(); }
+      else { initLatestSession(); loadSessionExpirations(); }
+    }
     function render() {
       if (!state.stratMode) state.activeStrategy = readActiveStrategy();
       updateSymbols();
       const rows = normalizedRows();
       const last = rows[rows.length - 1], prev = rows[rows.length - 2];
-      $("spotSymbol").textContent = state.symbol;
       if (!rows.length) {
         $("empty").style.display = "grid";
         Plotly.purge("chart");
-        $("status").className = "status";
-        $("status").textContent = (state.file || state.httpMode) ? "sin UNDERLYING_BID" : "esperando CSV";
+        const status = $("status");
+        if (status) {
+          status.className = "status";
+          status.textContent = (state.file || state.httpMode) ? "sin UNDERLYING_BID" : "esperando CSV";
+        }
         return;
       }
       $("empty").style.display = "none";
       const diff = prev ? last.spot - prev.spot : null;
       $("spotValue").textContent = fmt2(last.spot);
-      $("spotTime").textContent = `last tick ${shortTime(last.timestamp)}`;
+      $("spotTime").textContent = `updated ${shortTime(last.timestamp)}`;
       $("spotChange").textContent = diff == null ? "" : `${diff >= 0 ? "+" : ""}${fmt2(diff)}`;
       $("spotChange").className = `chg ${diff == null ? "" : diff >= 0 ? "pos" : "neg"}`.trim();
-      $("sideSpot").textContent = fmt2(last.spot);
-      $("sideTime").textContent = shortTime(last.timestamp);
-      $("sideSamples").textContent = fmt0(rows.length);
-      $("sideBid").textContent = fmt2(last.bid);
-      $("sideAsk").textContent = fmt2(last.ask);
-      $("sideMark").textContent = fmt2(last.mark);
-      $("sideVol").textContent = fmt0(last.volume);
+      buildStrikeTable();
+      if ($("sideSpot")) {
+        $("sideSpot").textContent = fmt2(last.spot);
+        $("sideTime").textContent = shortTime(last.timestamp);
+        $("sideSamples").textContent = fmt0(rows.length);
+        $("sideBid").textContent = fmt2(last.bid);
+        $("sideAsk").textContent = fmt2(last.ask);
+        $("sideMark").textContent = fmt2(last.mark);
+        $("sideVol").textContent = fmt0(last.volume);
+      }
       if ($("stratSideSpot")) {
         $("stratSideSpot").textContent = fmt2(last.spot);
         $("stratSideTime").textContent = shortTime(last.timestamp);
@@ -1429,16 +1674,83 @@
         $("stratSideMark").textContent = fmt2(last.mark);
         $("stratSideVol").textContent = fmt0(last.volume);
       }
-      $("status").className = "status live";
-      $("status").textContent = "CSV live";
+      const status = $("status");
+      if (status) {
+        status.className = "status live";
+        status.textContent = "CSV live";
+      }
       drawChart(rows, last.spot);
     }
 
 
+
+    function updateSessionToggle() {
+      const btn = $("toggleSession");
+      if (!btn) return;
+      const isRth = state.chartConfig.use_rth_only !== false;
+      state.rangeMode = isRth ? "RTH" : "ETH";
+      btn.textContent = state.rangeMode;
+      btn.classList.toggle("on", isRth);
+      const start = state.chartConfig.rth_start_bcn || "15:30";
+      const end = state.chartConfig.rth_end_bcn || "22:50";
+      btn.title = isRth ? `RTH ${start}-${end} Barcelona` : "ETH: rango completo";
+    }
+    function setRangeMode(mode) {
+      const nextMode = mode === "ETH" ? "ETH" : "RTH";
+      state.rangeMode = nextMode;
+      state.chartConfig = { ...state.chartConfig, use_rth_only: nextMode === "RTH" };
+      state.chartRangeKey = chartRangeKey(state.chartConfig);
+      state.userRange = null;
+      try { localStorage.setItem(RANGE_MODE_KEY, nextMode); } catch (_) {}
+      updateSessionToggle();
+      if (state.rows.length) render();
+    }
+    function chartRangeKey(cfg = state.chartConfig) {
+      return `${cfg.use_rth_only ? 1 : 0}|${cfg.rth_start_bcn || ""}|${cfg.rth_end_bcn || ""}`;
+    }
+    async function loadChartConfig() {
+      if (!state.httpMode) return;
+      try {
+        const cfg = await (await fetch(`/api/chart-config?ts=${Date.now()}`, { cache: "no-store" })).json();
+        const serverUseRth = cfg.use_rth_only !== false;
+        const mode = state.rangeMode || (serverUseRth ? "RTH" : "ETH");
+        const next = {
+          use_rth_only: mode === "RTH",
+          rth_start_bcn: cfg.rth_start_bcn || state.chartConfig.rth_start_bcn,
+          rth_end_bcn: cfg.rth_end_bcn || state.chartConfig.rth_end_bcn,
+          rth_timezone: cfg.rth_timezone || state.chartConfig.rth_timezone || "BCN",
+        };
+        state.rangeMode = mode;
+        const nextKey = chartRangeKey(next);
+        if (nextKey !== state.chartRangeKey) {
+          state.chartConfig = next;
+          state.chartRangeKey = nextKey;
+          state.userRange = null;
+          if (state.rows.length) render();
+        } else {
+          state.chartConfig = next;
+        }
+        updateSessionToggle();
+      } catch (err) { /* keep local defaults */ }
+    }
+    function activeSessionDay() {
+      const selected = state.premiumDay || ($("strikeDay") && $("strikeDay").value);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(selected || "")) return selected;
+      const rows = normalizedRows();
+      const last = rows.length ? rows[rows.length - 1] : null;
+      const match = String((last && last.timestamp) || "").match(/^(\d{4}-\d{2}-\d{2})/);
+      if (match) return match[1];
+      return new Date().toISOString().slice(0, 10);
+    }
     function selectedSessionRange() {
-      const day = state.premiumDay || ($("premiumDay") && $("premiumDay").value);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(day || "")) return null;
-      return [new Date(`${day}T00:00:00`), new Date(`${day}T23:59:59`)];
+      const cfg = state.chartConfig || {};
+      if (cfg.use_rth_only === false) return null;
+      const start = cfg.rth_start_bcn || "15:30";
+      const end = cfg.rth_end_bcn || "22:00";
+      if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) return null;
+      const day = activeSessionDay();
+      const range = [new Date(`${day}T${start}:00`), new Date(`${day}T${end}:00`)];
+      return range.every(d => Number.isFinite(d.getTime())) ? range : null;
     }
 
     function paddedTimeRange(xValues) {
@@ -1472,92 +1784,54 @@
       return [lo - pad, hi + pad];
     }
 
-    function strategyPriceLines(yLo, yHi) {
-      // Note: BE/strike levels do NOT drive the axis scale (that follows the price/spot only).
-      // In-range levels draw as lines; out-of-range BE are shown as labels parked at the chart edge.
-      if (state.stratMode) return { shapes: [], annotations: [] };
-      const d = state.activeStrategy;
-      let lines = null;
-      if (d && d.symbol === state.symbol) {
-        lines = d.type === "short_strangle"
-          ? [
-              { label: "BE", value: Number(d.be_low), color: "#ff3b4f", dash: "dot" },
-              { label: "Put", value: Number(d.put_strike), color: "#facc15", dash: "dash" },
-              { label: "Call", value: Number(d.call_strike), color: "#facc15", dash: "dash" },
-              { label: "BE", value: Number(d.be_high), color: "#ff3b4f", dash: "dot" },
-            ]
-          : [
-              { label: "BE", value: Number(d.be_low), color: "#ff3b4f", dash: "dot" },
-              { label: "Strike", value: Number(d.strike), color: "#facc15", dash: "dash" },
-              { label: "BE", value: Number(d.be_high), color: "#ff3b4f", dash: "dot" },
-            ];
-      } else if (state.premium && Number.isFinite(Number(state.premium.strike))) {
-        // Fallback: straddle on the selected strike. BE = strike +/- session-open credit (call+put).
-        const K = Number(state.premium.strike);
-        const c0 = ((state.premium.call && state.premium.call.last) || []).find(v => Number.isFinite(v) && v > 0);
-        const p0 = ((state.premium.put && state.premium.put.last) || []).find(v => Number.isFinite(v) && v > 0);
-        const credit = (Number.isFinite(c0) && Number.isFinite(p0)) ? c0 + p0 : null;
-        lines = [{ label: "Strike", value: K, color: "#facc15", dash: "dash" }];
-        if (credit) {
-          lines.unshift({ label: "BE", value: K - credit, color: "#ff3b4f", dash: "dot" });
-          lines.push({ label: "BE", value: K + credit, color: "#ff3b4f", dash: "dot" });
-        }
-      }
-      if (!lines) return { shapes: [], annotations: [] };
-      const validLines = lines.filter(line => Number.isFinite(line.value));
-      const hasRange = Number.isFinite(yLo) && Number.isFinite(yHi);
-      const shapes = [];
-      const annotations = [];
-      for (const line of validLines) {
-        const label = `${line.label} ${line.label === "BE" ? fmtBE0(line.value) : fmt0(line.value)}`;
-        const inRange = !hasRange || (line.value >= yLo && line.value <= yHi);
-        if (inRange) {
-          shapes.push({ type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: line.value, y1: line.value,
-            line: { color: line.color, width: 1, dash: line.dash }, layer: "above" });
-          annotations.push({ xref: "paper", yref: "y", x: 1, y: line.value, xanchor: "right", yanchor: "middle",
-            showarrow: false, text: label, font: { color: line.color, size: 11, weight: 700 },
-            bgcolor: "rgba(11,14,20,0.85)", bordercolor: line.color, borderwidth: 1, borderpad: 3 });
-        } else {
-          const top = line.value > yHi;
-          annotations.push({ xref: "paper", yref: "paper", x: 1, y: top ? 1 : 0, xanchor: "right",
-            yanchor: top ? "top" : "bottom", showarrow: false, text: `${label} ${top ? "▲" : "▼"}`,
-            font: { color: line.color, size: 10, weight: 700 }, bgcolor: "rgba(11,14,20,0.85)",
-            bordercolor: line.color, borderwidth: 1, borderpad: 3 });
-        }
-      }
+    function selectedStrikeLevels() {
+      const seen = new Set();
+      return state.selected
+        .map(sel => Number(sel.strike))
+        .filter(Number.isFinite)
+        .filter(level => {
+          const key = String(level);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .sort((a, b) => a - b);
+    }
+
+    function selectedStrikeOverlays(levels) {
+      const shapes = levels.map(level => ({
+        type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: level, y1: level,
+        line: { color: "#ffd400", width: 1, dash: "dash" }, layer: "above"
+      }));
+      const annotations = levels.map(level => ({
+        xref: "paper", yref: "y", x: 1, y: level,
+        xanchor: "right", yanchor: "middle", text: `Strike ${fmt0(level)}`,
+        showarrow: false, font: { color: "#ffd400", size: 11, weight: 700 },
+        bgcolor: "rgba(11,14,20,0.88)", bordercolor: "#ffd400", borderwidth: 1, borderpad: 3
+      }));
       return { shapes, annotations };
     }
-
-    function premiumSumSeries(call, put) {
-      const n = Math.min(
-        call && call.t ? call.t.length : 0,
-        put && put.t ? put.t.length : 0,
-        call && call.last ? call.last.length : 0,
-        put && put.last ? put.last.length : 0
-      );
-      const t = [];
-      const y = [];
-      for (let i = 0; i < n; i++) {
-        const callLast = Number(call.last[i]);
-        const putLast = Number(put.last[i]);
-        if (!Number.isFinite(callLast) || !Number.isFinite(putLast)) continue;
-        t.push(put.t[i] || call.t[i]);
-        y.push(callLast + putLast);
-      }
-      return t.length ? { t, y } : null;
-    }
-
     function drawChart(rows, lastSpot) {
       if (state.stratMode) { Plotly.purge("chart"); return; }
-      // Past-day view: draw that session's own underlying (so price and premium align in time).
-      const sessionUnder = state.premiumPast && state.premium && state.premium.underlying;
-      const x = sessionUnder ? state.premium.underlying.t : rows.map(r => r.timestamp);
-      const y = sessionUnder ? state.premium.underlying.bid : rows.map(r => r.spot);
+      // Selected option series (multi-select from the STRIKES table). They share the
+      // session underlying; on a past day we use it so price and premium align in time.
+      const past = !!(currentDay() && state.latestDay && currentDay() !== state.latestDay);
+      const selSeries = state.selected
+        .map(sel => ({ sel, data: state.series[seriesKey(sel.strike)] }))
+        .filter(o => o.data);
+      const underSrc = past
+        ? (selSeries.find(o => o.data.underlying && o.data.underlying.t && o.data.underlying.t.length) || {}).data
+        : null;
+      const sessionUnder = underSrc && underSrc.underlying;
+      const x = sessionUnder ? underSrc.underlying.t : rows.map(r => r.timestamp);
+      const y = sessionUnder ? underSrc.underlying.bid : rows.map(r => r.spot);
       if (sessionUnder && y.length) lastSpot = y[y.length - 1];
-      // Left axis scales to the PRICE/spot only (not the BE/strike levels).
-      const ymin = Math.min(...y), ymax = Math.max(...y), span = Math.max(ymax - ymin, 0.01);
+      const strikeLevels = selectedStrikeLevels();
+      const strikeOverlays = selectedStrikeOverlays(strikeLevels);
+      // Left axis scales to the PRICE/spot and selected strike reference lines, not premiums.
+      const yScaleVals = [...y, ...strikeLevels];
+      const ymin = Math.min(...yScaleVals), ymax = Math.max(...yScaleVals), span = Math.max(ymax - ymin, 0.01);
       const yLo = ymin - span * 0.18, yHi = ymax + span * 0.22;
-      const strategyLines = strategyPriceLines(yLo, yHi);
       // Optional toggle: show premiums as % change from the session's first value.
       const pct = state.premiumPct;
       const toPct = arr => {
@@ -1566,73 +1840,81 @@
       };
       const yfmt = pct ? "%{y:,.1f}%" : "%{y:,.2f}";
       const trace = {
-        x, y, type: "scatter", mode: "lines", name: state.symbol,
+        x, y, type: "scatter", mode: "lines", name: state.symbol, showlegend: false,
         line: { color: "#22d3ee", width: 3 },
-        hovertemplate: "%{x}<br>Bid: %{y:,.2f}<extra></extra>"
+        hovertemplate: "%{x|%d/%m/%Y %H:%M}<br>Bid: %{y:,.2f}<extra></extra>"
       };
-      // Premium (BID) overlay: call and put share one right axis.
+      // Premium (BID) overlay: every selected contract shares one right axis.
+      const PUT_COLORS = ["#ff3b4f", "#ef4444", "#dc2626", "#fb7185", "#f43f5e", "#b91c1c", "#f87171", "#991b1b"];
+      const CALL_COLORS = ["#00e676", "#22c55e", "#16a34a", "#4ade80", "#10b981", "#15803d", "#86efac", "#166534"];
       const premiumTraces = [];
       const premiumX = [];
       const y2Vals = [];
-      const p = state.premium;
-      const hasCall = !!(p && p.call && p.call.t && p.call.t.length);
-      const hasPut = !!(p && p.put && p.put.t && p.put.t.length);
-      if (hasCall) {
-        const cy = toPct(p.call.last);
-        premiumTraces.push({ x: p.call.t, y: cy, type: "scatter", mode: "lines", name: `call ${p.strike}`,
-          yaxis: "y2", line: { color: "rgba(0, 230, 118, 0.3)", width: 1, dash: "solid" }, hovertemplate: `%{x}<br>call ${yfmt}<extra></extra>` });
-        premiumX.push(...p.call.t); y2Vals.push(...cy);
-      }
-      if (hasPut) {
-        const py = toPct(p.put.last);
-        premiumTraces.push({ x: p.put.t, y: py, type: "scatter", mode: "lines", name: `put ${p.strike}`,
-          yaxis: "y2", line: { color: "rgba(255, 59, 79, 0.3)", width: 1, dash: "solid" }, hovertemplate: `%{x}<br>put ${yfmt}<extra></extra>` });
-        premiumX.push(...p.put.t); y2Vals.push(...py);
-      }
-      const premiumSum = hasCall && hasPut ? premiumSumSeries(p.call, p.put) : null;
-      if (premiumSum) {
-        const sy = toPct(premiumSum.y);
-        premiumTraces.push({ x: premiumSum.t, y: sy, type: "scatter", mode: "lines", name: `call+put ${p.strike}`,
-          yaxis: "y2", line: { color: "#2563ff", width: 2.6 }, hovertemplate: `%{x}<br>call + put ${yfmt}<extra></extra>` });
-        premiumX.push(...premiumSum.t); y2Vals.push(...sy);
-      }
+      let putColorIdx = 0, callColorIdx = 0;
+      selSeries.forEach(({ sel, data }) => {
+        const isCall = sel.side === "call";
+        const leg = isCall ? data.call : data.put;
+        if (!leg || !leg.t || !leg.t.length) return;
+        const yv = toPct(leg.last);
+        const color = isCall ? CALL_COLORS[callColorIdx++ % CALL_COLORS.length] : PUT_COLORS[putColorIdx++ % PUT_COLORS.length];
+        const label = `${sel.side} ${sel.strike}`;
+        premiumTraces.push({ x: leg.t, y: yv, type: "scatter", mode: "lines", name: label,
+          yaxis: "y2", line: { color, width: 2 }, hovertemplate: `%{x|%d/%m/%Y %H:%M}<br>${label} ${yfmt}<extra></extra>` });
+        premiumX.push(...leg.t); y2Vals.push(...yv);
+      });
+      const hasPremium = premiumTraces.length > 0;
       const xRange = withRightPad(selectedSessionRange() || paddedTimeRange([...x, ...premiumX]));
+      const chartFrameShape = {
+        type: "rect", xref: "paper", yref: "paper", x0: 0, x1: 1, y0: 0, y1: 1,
+        line: { color: "rgba(148, 163, 184, 0.42)", width: 1 },
+        fillcolor: "rgba(0,0,0,0)", layer: "above"
+      };
       const layout = {
-        uirevision: `${state.symbol}-manual-zoom`,
+        uirevision: `${state.symbol}-${state.chartRangeKey}-manual-zoom`,
         paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", separators: ",.",
         font: { color: "#cbd5e1", family: "Inter, Arial, sans-serif", size: 11 },
         margin: { l: state.stratMode ? 380 : 54, r: state.stratMode ? 330 : 330, t: 76, b: 38 },
-        showlegend: premiumTraces.length > 0, legend: { x: 0.01, y: 0.99, bgcolor: "rgba(5,8,13,0.5)", font: { size: 11 } },
+        showlegend: false,
         hovermode: "closest", dragmode: "pan",
         xaxis: { range: xRange, showgrid: false, color: "#dbeafe", showline: true, mirror: true, linecolor: "#3a4453", linewidth: 1, tickfont: { color: "#dbeafe", size: 10 }, zeroline: false },
         yaxis: { range: [yLo, yHi], showgrid: true, gridcolor: "#15191f", showline: true, mirror: true, linecolor: "#3a4453", linewidth: 1, color: "#cbd5e1", zeroline: false, tickformat: ",.2f" },
         yaxis2: { overlaying: "y", side: "right", autorange: true, showgrid: false, showline: true, linecolor: "#3a4453", linewidth: 1, zeroline: pct, zerolinecolor: "#2a3140", color: "#cbd5e1", tickformat: pct ? ",.1f" : ",.2f", ticksuffix: pct ? "%" : "" },
         shapes: [
+          chartFrameShape,
           { type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: lastSpot, y1: lastSpot, line: { color: "#22d3ee", width: 1 }, layer: "above" },
-          ...strategyLines.shapes
+          ...strikeOverlays.shapes
         ],
         annotations: [
           { xref: "paper", yref: "y", x: 1, y: lastSpot, xanchor: "right", yanchor: "middle", text: `Bid ${fmt2(lastSpot)}`, showarrow: false, font: { color: "#22d3ee", size: 11, weight: 700 }, bgcolor: "rgba(11,14,20,0.85)", bordercolor: "#22d3ee", borderwidth: 1, borderpad: 3 },
-          ...strategyLines.annotations
+          ...strikeOverlays.annotations
         ]
       };
-      if (!hasCall && !hasPut) {
+      if (!hasPremium) {
         delete layout.yaxis2;
       } else {
         const r2 = robustRange(y2Vals);   // fit the right axis to the bulk, not outlier spikes
         if (r2) { layout.yaxis2.autorange = false; layout.yaxis2.range = r2; }
       }
-      // Toggle: hide the underlying line/axis so only the call & put premiums show.
+      // Legend identifies each selected contract line when one or more is plotted.
+      layout.showlegend = hasPremium;
+      layout.legend = { orientation: "h", x: 0.5, y: 0.02, xanchor: "center", yanchor: "bottom",
+        font: { color: "#cbd5e1", size: 10 }, bgcolor: "rgba(0,0,0,0)", borderwidth: 0 };
+      // Toggle: hide the underlying line, but keep the chart frame/axes visible.
       const chartTraces = state.hideUnderlying ? [...premiumTraces] : [trace, ...premiumTraces];
       if (state.hideUnderlying) {
-        layout.yaxis.visible = false;
-        layout.shapes = [];
-        layout.annotations = [];
+        layout.shapes = [chartFrameShape, ...strikeOverlays.shapes];
+        layout.annotations = [...strikeOverlays.annotations];
+        layout.yaxis.showgrid = false;
+        if (layout.yaxis2) {
+          layout.yaxis2.showgrid = true;
+          layout.yaxis2.gridcolor = "rgba(148,163,184,0.14)";
+          layout.yaxis2.griddash = "solid";
+        }
         if (premiumX.length) layout.xaxis.range = state.userRange && state.userRange.xaxis ? state.userRange.xaxis : paddedTimeRange(premiumX);
       }
       if (state.userRange) {
         if (state.userRange.xaxis) layout.xaxis.range = state.userRange.xaxis;
-        if (!state.hideUnderlying && state.userRange.yaxis) layout.yaxis.range = state.userRange.yaxis;
+        if (state.userRange.yaxis) layout.yaxis.range = state.userRange.yaxis;
       }
       state.applyingLayout = true;
       Plotly.react("chart", chartTraces, layout, { responsive: true, displaylogo: false, scrollZoom: true, modeBarButtonsToRemove: ["lasso2d", "select2d"] })
@@ -1675,7 +1957,7 @@
       await loadText(await file.text(), "CSV");
     }
     async function loadHttpCsv() {
-      const res = await fetch(`/api/tos-live-csv?ts=${Date.now()}`, { cache: "no-store" });
+      const res = await fetch(`/api/tos-live-csv?ticker=${encodeURIComponent(state.symbol)}&ts=${Date.now()}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await loadText(await res.text(), "HTTP CSV");
     }
@@ -1719,13 +2001,77 @@
       if (state.timer) clearInterval(state.timer);
       state.timer = setInterval(refreshFile, 5000);
     });
-    $("symbolSelect").addEventListener("change", ev => { state.symbol = ev.target.value; render(); });
+    // Strike table (right band, under the spot card). Placeholder list for now:
+    // strikes are derived from the latest spot; checkbox + L/S letter (default L).
+    function buildStrikeTable(force) {
+      updateStrikeTitle();
+      const dateEl = $("strikeDay");
+      if (dateEl && !dateEl.value) dateEl.value = new Date().toLocaleDateString("en-CA"); // session day defaults to today
+      const rows = normalizedRows();
+      const last = rows[rows.length - 1];
+      const spot = last ? last.spot : null;
+      let base, step;
+      if (spot != null && isFinite(spot)) {
+        step = spot >= 2000 ? 25 : spot >= 200 ? 5 : 1;
+        base = Math.round(spot / step) * step;
+      } else {
+        base = 4200; step = 10;  // fallback before any live data
+      }
+      const key = `${state.symbol}|${dateEl ? dateEl.value : ""}|${base}|${step}`;
+      if (!force && key === state.strikeKey) return;  // keep user toggles between live ticks
+      state.strikeKey = key;
+      const N = 12;
+      const cell = side => `<td><span class="strike-opt is-short" data-side="${side}"><span class="strike-chk"></span><span class="strike-ls">S</span></span></td>`;
+      let html = "";
+      for (let i = N; i >= -N; i--) {
+        const k = base + i * step;
+        const atmCls = k === base ? " class=\"atm\"" : "";
+        html += `<tr${atmCls} data-strike="${k}"><td class="strike-val">${k}</td>${cell("put")}${cell("call")}</tr>`;
+      }
+      $("strikeRows").innerHTML = html;
+      applyStrikeSelection();
+    }
+    // Re-mark the boxes that are in the current multi-selection (after a rebuild).
+    function applyStrikeSelection() {
+      document.querySelectorAll("#strikeRows .strike-opt").forEach(opt => {
+        const strike = opt.closest("tr").dataset.strike;
+        const on = state.selected.some(s => s.strike === strike && s.side === opt.dataset.side);
+        opt.classList.toggle("on", on);
+      });
+    }
+    // Click a box: toggle that contract (put/call of its strike) in the multi-selection;
+    // its premium line is added/removed on the chart. Click the L/S letter to switch
+    // Long/Short (recolors check + letter; not used for plotting yet).
+    $("strikeRows").addEventListener("click", ev => {
+      const opt = ev.target.closest(".strike-opt");
+      if (!opt) return;
+      if (ev.target.closest(".strike-ls")) {
+        const ls = opt.querySelector(".strike-ls");
+        const toLong = ls.textContent.trim() === "S";
+        ls.textContent = toLong ? "L" : "S";
+        opt.classList.toggle("is-long", toLong);
+        opt.classList.toggle("is-short", !toLong);
+      } else if (ev.target.closest(".strike-chk")) {
+        const on = !opt.classList.contains("on");
+        opt.classList.toggle("on", on);
+        selectContract(opt.closest("tr").dataset.strike, opt.dataset.side, on);
+      }
+    });
+    // Session day (calendar) changed: rebuild the ladder and refresh expirations + series.
+    $("strikeDay").addEventListener("change", () => { buildStrikeTable(true); loadSessionExpirations(); });
+    // Expiration changed: re-fetch the selected contracts for the new expiration.
+    $("strikeExp").addEventListener("change", () => reloadSeries());
+    $("symbolSelect").addEventListener("change", ev => setTicker(ev.target.value));
     window.addEventListener("resize", () => { if (state.rows.length) render(); });
     window.addEventListener("storage", ev => {
       if (ev.key === ACTIVE_STRATEGY_KEY && !state.stratMode && state.rows.length) render();
     });
+    loadChartConfig();
+    loadTickers();
     initStratMode();
     initPremiumPanel();
+    renderStrikeExpirationSelect("Cargando...");
+    buildStrikeTable(true);  // show the table immediately (fallback strikes until data arrives)
     if (state.httpMode) {
       refreshFile();
       state.timer = setInterval(refreshFile, 5000);
@@ -1733,4 +2079,5 @@
   </script>
 </body>
 </html>
+
 

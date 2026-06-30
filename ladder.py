@@ -1,26 +1,22 @@
-"""Build and persist the ATM strike ladder (active_symbols.json) for a session.
+"""Build and persist the ATM strike ladder(s) (active_symbols.json) for a session.
 
-Shared by the dashboard START button (serve_start) and the collector's automatic
-anchor at the market open: refresh the chain from Yahoo (nearest expiration),
-find the ATM, take `levels` strikes each side, and write all legs to
-active_symbols.json so the collector subscribes the whole ladder.
+Multi-ticker: anchors every ticker (nearest expiration -> ATM -> `levels` strikes
+each side -> call+put legs) and writes them all together, so the collector
+subscribes the whole portfolio. Used by the START button and the auto-anchor.
 """
 import json
 from datetime import datetime
 from pathlib import Path
 
-from config import DEFAULT_LEVELS
+from config import RECORD_LEVELS, TICKERS
 from get_near_ATM_strikes import build_payload
 from get_option_chain import fetch_and_save_nearest
 
 ACTIVE_SYMBOLS_FILE = Path(__file__).resolve().parent / "RTD_live_excel" / "active_symbols.json"
 
 
-def anchor_ladder(ticker="MU", levels=DEFAULT_LEVELS, refresh=True, spot=None, mode="auto"):
-    """Yahoo chain (nearest expiration) -> ATM -> `levels` strikes each side -> active_symbols.json.
-
-    Returns a summary dict. If refresh and Yahoo fails, falls back to the saved chain.
-    """
+def _build_ticker(ticker, levels=RECORD_LEVELS, refresh=True, spot=None):
+    """Build one ticker's ladder. Returns (summary_dict, legs)."""
     chain_note = "cadena guardada"
     if refresh:
         try:
@@ -39,17 +35,52 @@ def anchor_ladder(ticker="MU", levels=DEFAULT_LEVELS, refresh=True, spot=None, m
                     "symbol": sym, "role": typ, "strike": s["strike"],
                     "expiration": payload["expiration"], "underlying_symbol": ticker,
                 })
+    summary = {
+        "ticker": ticker, "expiration": payload["expiration"], "dte": payload["dte"],
+        "atm": payload["atm"], "spot": payload["spot"], "levels": levels,
+        "contracts": len(legs), "chain": chain_note,
+    }
+    return summary, legs
+
+
+def anchor_all(tickers=None, levels=RECORD_LEVELS, refresh=True, mode="auto"):
+    """Anchor every ticker and write the combined active_symbols.json."""
+    tickers = tickers or TICKERS
+    by_ticker = {}
+    options = []
+    errors = {}
+    for tk in tickers:
+        try:
+            summary, legs = _build_ticker(tk, levels=levels, refresh=refresh)
+            by_ticker[tk] = summary
+            options.extend(legs)
+        except Exception as exc:  # noqa: BLE001
+            errors[tk] = str(exc)
 
     active = {
-        "underlying": ticker, "strategy": "ladder", "mode": mode,
-        "expiration": payload["expiration"], "dte": payload["dte"], "atm": payload["atm"],
-        "spot": payload["spot"], "levels": levels,
-        "written_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "options": legs,
+        "strategy": "ladder",
+        "mode": mode,
+        "levels": levels,
+        "written_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "tickers": by_ticker,
+        "options": options,  # flat list (each leg has underlying_symbol)
     }
     ACTIVE_SYMBOLS_FILE.parent.mkdir(parents=True, exist_ok=True)
     ACTIVE_SYMBOLS_FILE.write_text(json.dumps(active, indent=2), encoding="utf-8")
     return {
-        "ok": True, "ticker": ticker, "expiration": payload["expiration"], "dte": payload["dte"],
-        "atm": payload["atm"], "spot": payload["spot"], "levels": levels,
-        "contracts": len(legs), "chain": chain_note, "path": str(ACTIVE_SYMBOLS_FILE),
+        "ok": True, "tickers": by_ticker, "errors": errors,
+        "contracts": len(options), "path": str(ACTIVE_SYMBOLS_FILE),
     }
+
+
+def anchor_ladder(ticker="MU", levels=RECORD_LEVELS, refresh=True, spot=None, mode="start"):
+    """Single-ticker anchor (kept for compatibility). Writes only this ticker."""
+    summary, legs = _build_ticker(ticker, levels=levels, refresh=refresh, spot=spot)
+    active = {
+        "strategy": "ladder", "mode": mode, "levels": levels,
+        "written_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "tickers": {ticker: summary}, "options": legs,
+    }
+    ACTIVE_SYMBOLS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    ACTIVE_SYMBOLS_FILE.write_text(json.dumps(active, indent=2), encoding="utf-8")
+    return {"ok": True, **summary, "path": str(ACTIVE_SYMBOLS_FILE)}

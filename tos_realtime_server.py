@@ -7,14 +7,16 @@ from datetime import date, datetime
 import win32com.client as win32
 
 import ladder
+import normalize
 import session_manager
 import session_store as store
+from symbol_map import underlying_symbol_from_option_root
 from config import (
     TICKERS,
     SERVER_REQUEST_COOLDOWN_FREQUENCY,
     RECORD_ONLY_MARKET_HOURS,
     AUTO_ANCHOR_AT_OPEN,
-    DEFAULT_LEVELS,
+    RECORD_LEVELS,
 )
 
 
@@ -22,9 +24,9 @@ from config import (
 # CONFIGURACION
 # =========================
 
-UNDERLYING_SYMBOL = TICKERS[0]     # de momento solo MU (config.TICKERS)
+UNDERLYING_SYMBOL = TICKERS[0]
 
-# Si no hay active_symbols.json, se usa esto como fallback.
+# Si no hay active_symbols.json, se usa este contrato historico como fallback.
 DEFAULT_OPTION_SYMBOLS = [".MU260626P1195"]
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "RTD_live_excel"
@@ -36,7 +38,7 @@ FIELDS = store.CONTRACT_FIELDS               # BID, VOLUME, DELTA, GAMMA, THETA,
 UNDERLYING_FIELDS = store.UNDERLYING_FIELDS  # LAST, BID, ASK, MARK, VOLUME (subyacente intacto)
 OPTION_HEADER_ROW = 5
 OPTION_FIRST_VALUE_ROW = 6
-MAX_OPTION_ROWS = 80              # portfolio intradia: varias patas desde A6
+MAX_OPTION_ROWS = 140             # per-ticker option rows from A6 (RECORD_LEVELS=30 -> 61 strikes -> 122 legs)
 UNDERLYING_HEADER_ROW = 1
 UNDERLYING_VALUE_ROW = 2
 
@@ -48,7 +50,7 @@ def safe_symbol_token(symbol):
 
 def option_underlying_symbol(symbol):
     match = re.match(r"^\.?([A-Z]+)\d{6}[CP]", str(symbol or "").strip().upper())
-    return match.group(1) if match else None
+    return underlying_symbol_from_option_root(match.group(1)) if match else None
 
 
 def clean_value(value):
@@ -134,7 +136,7 @@ def load_active_symbols():
                 if leg:
                     legs.append(leg)
         if legs:
-            return legs[:MAX_OPTION_ROWS]
+            return legs  # capped per-ticker in legs_by_ticker (combined list spans all tickers)
     except FileNotFoundError:
         pass
     except Exception as exc:
@@ -162,10 +164,63 @@ def save_workbook_as(excel, wb, path):
         excel.DisplayAlerts = previous_alerts
 
 
-def get_or_create_excel(symbols):
+def legs_by_ticker(legs):
+    """Group legs by their underlying ticker (only tickers in config.TICKERS).
+
+    Each ticker is capped to MAX_OPTION_ROWS so it fits its Excel sheet (one RTD
+    row per leg from A6). With RECORD_LEVELS=30 that's 122 legs, well under the cap.
+    """
+    out = {t.upper(): [] for t in TICKERS}
+    for leg in legs:
+        und = (leg.get("underlying_symbol") or option_underlying_symbol(leg.get("symbol")) or "").upper()
+        if und in out:
+            out[und].append(leg)
+    return {tk: legs_tk[:MAX_OPTION_ROWS] for tk, legs_tk in out.items()}
+
+
+def setup_sheet(ws, ticker, legs):
+    """Lay out one ticker's RTD sheet: underlying block + option ladder."""
+    ws.Cells.Clear()
+    ws.Cells(UNDERLYING_HEADER_ROW, 1).Value = "UNDERLYING_SYMBOL"
+    ws.Cells(UNDERLYING_VALUE_ROW, 1).Value = ticker
+    for col, field in enumerate(UNDERLYING_FIELDS, start=2):
+        ws.Cells(UNDERLYING_HEADER_ROW, col).Value = f"UNDERLYING_{field}"
+        ws.Cells(UNDERLYING_VALUE_ROW, col).Formula = f'=RTD("tos.rtd",,"{field}","{ticker}")'
+    ws.Cells(OPTION_HEADER_ROW, 1).Value = "SYMBOL"
+    for col, field in enumerate(FIELDS, start=2):
+        ws.Cells(OPTION_HEADER_ROW, col).Value = field
+    apply_symbols(ws, legs, build_formulas=True)
+
+
+def get_or_create_sheet(wb, ticker):
+    for sh in wb.Worksheets:
+        if str(sh.Name).upper() == ticker.upper():
+            return sh
+    ws = wb.Worksheets.Add(After=wb.Worksheets(wb.Worksheets.Count))
+    ws.Name = ticker
+    return ws
+
+
+def cleanup_sheets(excel, wb):
+    """Drop leftover non-ticker sheets (old 'LIVE'/'Sheet1')."""
+    keep = {t.upper() for t in TICKERS}
+    to_delete = [sh for sh in wb.Worksheets if str(sh.Name).upper() not in keep]
+    previous = excel.DisplayAlerts
+    excel.DisplayAlerts = False
+    try:
+        for sh in to_delete:
+            if wb.Worksheets.Count > 1:
+                sh.Delete()
+    finally:
+        excel.DisplayAlerts = previous
+
+
+def get_or_create_excel(legs_by_tk):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    excel = win32.gencache.EnsureDispatch("Excel.Application")
+    # Late binding (Dispatch) avoids the gen_py/makepy step, so it also works when
+    # launched from a non-interactive/background process.
+    excel = win32.Dispatch("Excel.Application")
     excel.Visible = True
 
     try:
@@ -205,27 +260,16 @@ def get_or_create_excel(symbols):
         wb = excel.Workbooks.Add()
         save_workbook_as(excel, wb, EXCEL_FILE)
 
-    ws = wb.Worksheets(1)
-    ws.Name = "LIVE"
-    ws.Cells.Clear()
-
-    # --- Subyacente (filas 1-2) ---
-    ws.Cells(UNDERLYING_HEADER_ROW, 1).Value = "UNDERLYING_SYMBOL"
-    ws.Cells(UNDERLYING_VALUE_ROW, 1).Value = UNDERLYING_SYMBOL
-    for col, field in enumerate(UNDERLYING_FIELDS, start=2):
-        ws.Cells(UNDERLYING_HEADER_ROW, col).Value = f"UNDERLYING_{field}"
-        ws.Cells(UNDERLYING_VALUE_ROW, col).Formula = f'=RTD("tos.rtd",,"{field}","{UNDERLYING_SYMBOL}")'
-
-    # --- Opciones (cabecera fila 5; valores dinamicos desde A6) ---
-    # Las formulas referencian $A{row}, asi que basta cambiar la columna A para re-apuntar el RTD.
-    ws.Cells(OPTION_HEADER_ROW, 1).Value = "SYMBOL"
-    for col, field in enumerate(FIELDS, start=2):
-        ws.Cells(OPTION_HEADER_ROW, col).Value = field
-
-    apply_symbols(ws, symbols, build_formulas=True)
+    # Una hoja (pestana) por ticker, cada una con su subyacente + escalera.
+    sheets = {}
+    for ticker in TICKERS:
+        ws = get_or_create_sheet(wb, ticker)
+        setup_sheet(ws, ticker, legs_by_tk.get(ticker.upper(), []))
+        sheets[ticker.upper()] = ws
+    cleanup_sheets(excel, wb)
 
     wb.Save()
-    return excel, wb, ws
+    return excel, wb, sheets
 
 
 def apply_symbols(ws, legs, build_formulas=False):
@@ -264,74 +308,107 @@ def build_session_index(symbol, day, legs):
         "date": store._day_text(day),
         "expiration": expiration,
         "underlying_file": store.underlying_path(symbol, day).name,
+        "normalized": True,  # values stored in real units (see normalize.py)
         "contracts": contracts,
     }
 
 
+def ensure_session_files(symbol, day, legs):
+    """Create the session tape files with headers as soon as the session index exists."""
+    store.ensure_header(store.underlying_path(symbol, day), store.UNDERLYING_HEADER)
+    for leg in legs:
+        sym = leg.get("symbol")
+        if not sym:
+            continue
+        und = leg.get("underlying_symbol") or option_underlying_symbol(sym) or symbol
+        store.ensure_header(store.contract_path(und, day, sym), store.CONTRACT_HEADER)
+
+def normalize_option_field(field, raw):
+    """Real-unit value for one option column (normalized at the source)."""
+    if field == "BID":
+        return normalize.option_price(raw)
+    if field == "IMPL_VOL":
+        return normalize.iv_decimal(raw)
+    if field in ("DELTA", "GAMMA", "THETA", "VEGA"):
+        return normalize.greek(field, raw)
+    return normalize.count(raw)  # VOLUME, OPEN_INT
+
+
 def read_underlying_row(ws):
-    """One underlying tape row from the Excel block (row 2)."""
+    """One underlying tape row (real units) from the Excel block (row 2)."""
     row = {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     for col, field in enumerate(UNDERLYING_FIELDS, start=2):
-        row[f"UNDERLYING_{field}"] = clean_value(ws.Cells(UNDERLYING_VALUE_ROW, col).Value)
+        name = f"UNDERLYING_{field}"
+        value = normalize.underlying_value(ws.Cells(UNDERLYING_VALUE_ROW, col).Value, name)
+        row[name] = value if value is not None else ""
     return row
 
 
 def read_leg_row(ws, value_row, previous_volume):
-    """One option-contract tape row (BID + greeks/IV) for the leg at value_row."""
+    """One option-contract tape row (real-unit BID + greeks/IV) for the leg at value_row."""
     symbol = clean_value(ws.Cells(value_row, 1).Value)
     if not symbol:
         return None, None, previous_volume
     row = {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     for col, field in enumerate(FIELDS, start=2):
-        row[field] = clean_value(ws.Cells(value_row, col).Value)
+        value = normalize_option_field(field, ws.Cells(value_row, col).Value)
+        row[field] = value if value is not None else ""
     volume = safe_float(row.get("VOLUME"))
     row["VOLUME_1M"] = max(volume - previous_volume, 0) if (previous_volume is not None and volume is not None) else ""
     return symbol, row, volume
 
 
+def index_all(day, lbt):
+    """Write the session index + tape headers for every ticker."""
+    for ticker in TICKERS:
+        tk = ticker.upper()
+        tlegs = lbt.get(tk, [])
+        store.write_index(tk, day, build_session_index(tk, day, tlegs))
+        ensure_session_files(tk, day, tlegs)
+
+
 def main():
-    symbol = UNDERLYING_SYMBOL
     day = date.today()
     print("Abre thinkorswim y deja la plataforma conectada.")
-    print("Creando Excel RTD...")
+    print("Creando Excel RTD (una pestana por ticker)...")
     print(f"Excel live:  {EXCEL_FILE}")
-    print(f"Sesion:      {store.session_dir(symbol, day)}")
-    print(f"Simbolos:    {ACTIVE_SYMBOLS_FILE} (lo escribe el boton SEND)")
+    print(f"Tickers:     {', '.join(TICKERS)}")
+    print(f"Simbolos:    {ACTIVE_SYMBOLS_FILE} (lo escribe START / auto-anchor)")
 
     legs = load_active_symbols()
-    excel, wb, ws = get_or_create_excel(legs)
-    store.write_index(symbol, day, build_session_index(symbol, day, legs))
+    lbt = legs_by_ticker(legs)
+    excel, wb, sheets = get_or_create_excel(lbt)
+    index_all(day, lbt)
 
     previous_volumes = {}
     last_signature = legs_signature(legs)
     recording = None  # None forces a status print on the first loop
     anchored_day = None  # auto-anchor the ladder once per session at the open
     print(f"Sesion:      {session_manager.status()}")
-    print(f"\nMonitorizando {len(legs)} contratos (cada {SERVER_REQUEST_COOLDOWN_FREQUENCY}s):")
-    for leg in legs:
-        print(f"- {leg.get('leg_type')} {leg.get('strike')} | {leg.get('symbol')}")
-    print("Pulsa CTRL + C para parar.\n")
+    print(f"Monitorizando {len(legs)} contratos en {len(TICKERS)} tickers "
+          f"(cada {SERVER_REQUEST_COOLDOWN_FREQUENCY}s). CTRL+C para parar.\n")
 
     while True:
         try:
-            # Cada dia es una carpeta de sesion nueva (sin arrastrar simbolos viejos).
             today = date.today()
             if today != day:
                 day = today
-                store.write_index(symbol, day, build_session_index(symbol, day, legs))
+                index_all(day, lbt)
                 previous_volumes = {}
-                print(f"[SESION] nueva carpeta: {store.session_dir(symbol, day)}")
+                print(f"[SESION] nuevo dia: {day}")
 
-            # Aplica nuevos simbolos si el dashboard los cambio (SEND / Start).
+            # Aplica nuevos simbolos si el dashboard los cambio (START / auto-anchor).
             current = load_active_symbols()
             current_signature = legs_signature(current)
             if current_signature != last_signature:
-                apply_symbols(ws, current, build_formulas=True)
                 legs = current
+                lbt = legs_by_ticker(legs)
+                for ticker in TICKERS:
+                    apply_symbols(sheets[ticker.upper()], lbt.get(ticker.upper(), []), build_formulas=True)
                 last_signature = current_signature
                 previous_volumes = {}
-                store.write_index(symbol, day, build_session_index(symbol, day, legs))
-                print(f"[SEND] portfolio actualizado: {len(legs)} contratos")
+                index_all(day, lbt)
+                print(f"[PORTFOLIO] actualizado: {len(legs)} contratos")
 
             # Siempre abierto, pero graba solo en sesion (NYSE). Captura desde el primer tick.
             market_open = (not RECORD_ONLY_MARKET_HOURS) or session_manager.is_market_open()
@@ -345,30 +422,30 @@ def main():
                 print(f"[SESION] {session_manager.status()} - grabando")
                 recording = True
 
-            # Auto-anclar la escalera al abrir (una vez por dia): refresca cadena + ATM + strikes.
+            # Auto-anclar las escaleras de TODOS los tickers al abrir (una vez por dia).
             if AUTO_ANCHOR_AT_OPEN and anchored_day != day:
-                for tk in TICKERS:
-                    try:
-                        res = ladder.anchor_ladder(ticker=tk, levels=DEFAULT_LEVELS, refresh=True, mode="auto")
-                        print(f"[AUTO-START] {tk}: {res['expiration']} ATM {res['atm']} | "
-                              f"{res['contracts']} contratos ({res['chain']})")
-                    except Exception as exc:  # noqa: BLE001
-                        print(f"[AUTO-START] error {tk}: {exc}")
+                try:
+                    res = ladder.anchor_all(TICKERS, levels=RECORD_LEVELS, refresh=True, mode="auto")
+                    for tk, s in (res.get("tickers") or {}).items():
+                        print(f"[AUTO-START] {tk}: {s['expiration']} ATM {s['atm']} | {s['contracts']} ({s['chain']})")
+                    for tk, err in (res.get("errors") or {}).items():
+                        print(f"[AUTO-START] error {tk}: {err}")
+                except Exception as exc:  # noqa: BLE001
+                    print(f"[AUTO-START] error: {exc}")
                 anchored_day = day
-                # La proxima vuelta detecta el nuevo active_symbols.json y aplica la escalera.
 
-            # Tape del subyacente (una linea por tick).
-            store.append_row(store.underlying_path(symbol, day), store.UNDERLYING_HEADER, read_underlying_row(ws))
-
-            # Tape por contrato.
-            for i, leg in enumerate(legs):
-                value_row = OPTION_FIRST_VALUE_ROW + i
-                sym = leg.get("symbol")
-                contract_sym, row, volume = read_leg_row(ws, value_row, previous_volumes.get(sym))
-                previous_volumes[sym] = volume
-                if contract_sym and row is not None:
-                    und = leg.get("underlying_symbol") or option_underlying_symbol(contract_sym) or symbol
-                    store.append_row(store.contract_path(und, day, contract_sym), store.CONTRACT_HEADER, row)
+            # Por ticker: tape del subyacente + tape por contrato.
+            for ticker in TICKERS:
+                tk = ticker.upper()
+                ws = sheets[tk]
+                store.append_row(store.underlying_path(tk, day), store.UNDERLYING_HEADER, read_underlying_row(ws))
+                for i, leg in enumerate(lbt.get(tk, [])):
+                    value_row = OPTION_FIRST_VALUE_ROW + i
+                    sym = leg.get("symbol")
+                    contract_sym, row, volume = read_leg_row(ws, value_row, previous_volumes.get(sym))
+                    previous_volumes[sym] = volume
+                    if contract_sym and row is not None:
+                        store.append_row(store.contract_path(tk, day, contract_sym), store.CONTRACT_HEADER, row)
 
             time.sleep(SERVER_REQUEST_COOLDOWN_FREQUENCY)
 

@@ -23,11 +23,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from config import DEFAULT_LEVELS
+from config import DEFAULT_LEVELS, TICKERS
+from symbol_map import yahoo_ticker_symbol
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
+CHAIN_DIR = DATA_DIR / "live" / "option_chain_and_expirations"
 OUTPUTS_DIR = Path(__file__).resolve().parent / "outputs"
-DEFAULT_TICKER = "MU"
+DEFAULT_TICKER = TICKERS[0]
 
 
 def dte_from_expiration(expiration: str) -> int | None:
@@ -39,9 +41,12 @@ def dte_from_expiration(expiration: str) -> int | None:
 
 
 def latest_chain_csv(ticker: str) -> Path:
-    files = sorted(DATA_DIR.glob(f"{ticker}_option_chain_*.csv"))
+    # Chains live in data/live/option_chain_and_expirations/ (fallback to legacy data/).
+    files = sorted(CHAIN_DIR.glob(f"{ticker}_option_chain_*.csv"))
     if not files:
-        raise FileNotFoundError(f"No option-chain CSV found for {ticker} in {DATA_DIR}")
+        files = sorted(DATA_DIR.glob(f"{ticker}_option_chain_*.csv"))
+    if not files:
+        raise FileNotFoundError(f"No option-chain CSV found for {ticker} in {CHAIN_DIR}")
     return files[-1]
 
 
@@ -85,7 +90,7 @@ def estimate_spot_from_itm_flag(chain: pd.DataFrame) -> float:
 def live_spot(ticker: str) -> float:
     import yfinance as yf
 
-    info = yf.Ticker(ticker).fast_info
+    info = yf.Ticker(yahoo_ticker_symbol(ticker)).fast_info
     price = info.get("last_price") or info.get("lastPrice")
     if not price:
         raise RuntimeError(f"yfinance returned no last price for {ticker}")

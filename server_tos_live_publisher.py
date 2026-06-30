@@ -1,15 +1,20 @@
 import csv
+import io
 import json
 import re
 from datetime import date, datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
+from zoneinfo import ZoneInfo
 
 import ladder
 import session_store as store
-from config import DEFAULT_LEVELS
+import importlib
+from config import DEFAULT_LEVELS, RECORD_LEVELS, TICKERS, USE_RTH_ONLY
 from get_near_ATM_strikes import build_payload
+from get_option_chain import fetch_and_save_expiration, fetch_and_save_nearest
+from symbol_map import underlying_symbol_from_option_root, yahoo_ticker_symbol
 from utils.black_scholes import bs_price, bs_greeks, DEFAULT_RATE
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -28,7 +33,7 @@ def safe_symbol_token(symbol):
 
 def option_underlying_symbol(symbol):
     match = re.match(r"^\.?([A-Z]+)\d{6}[CP]", str(symbol or "").strip().upper())
-    return match.group(1) if match else None
+    return underlying_symbol_from_option_root(match.group(1)) if match else None
 
 
 def live_csv_file(ticker="MU", day=None):
@@ -54,6 +59,188 @@ def latest_live_csv(ticker="MU"):
         return LEGACY_TOS_CSV
     return today_file
 
+LEGACY_UNDERLYING_CSV_HEADER = [
+    "timestamp", "underlying_symbol",
+    "UNDERLYING_LAST", "UNDERLYING_BID", "UNDERLYING_ASK", "UNDERLYING_MARK", "UNDERLYING_VOLUME",
+]
+
+
+def _parse_clock(value):
+    h, m = str(value).split(":", 1)
+    return int(h), int(m)
+
+
+RTH_TZ_ALIASES = {
+    "BCN": "Europe/Madrid",
+    "BARCELONA": "Europe/Madrid",
+    "MADRID": "Europe/Madrid",
+    "NY": "America/New_York",
+    "NEW_YORK": "America/New_York",
+    "NEW YORK": "America/New_York",
+    "CHICAGO": "America/Chicago",
+    "CHI": "America/Chicago",
+}
+
+
+def _rth_source(runtime_config=None):
+    runtime_config = runtime_config or __import__("config")
+    tz_key = str(getattr(runtime_config, "RTH_TIMEZONE", "BCN") or "BCN").upper().strip()
+    start = getattr(runtime_config, "RTH_START", None)
+    end = getattr(runtime_config, "RTH_END", None)
+    if start is None:
+        start = getattr(runtime_config, "RTH_START_BCN", "15:30")
+    if end is None:
+        end = getattr(runtime_config, "RTH_END_BCN", "22:50")
+    return tz_key, str(start), str(end)
+
+
+def rth_window_bcn(day=None, runtime_config=None):
+    """Return configured RTH window converted to Barcelona local HH:MM strings."""
+    target_day = date.fromisoformat(str(day)) if day else date.today()
+    tz_key, start_text, end_text = _rth_source(runtime_config)
+    source_tz_name = RTH_TZ_ALIASES.get(tz_key, tz_key)
+    source_tz = ZoneInfo(source_tz_name)
+    bcn_tz = ZoneInfo("Europe/Madrid")
+    sh, sm = _parse_clock(start_text)
+    eh, em = _parse_clock(end_text)
+    start_src = datetime(target_day.year, target_day.month, target_day.day, sh, sm, tzinfo=source_tz)
+    end_src = datetime(target_day.year, target_day.month, target_day.day, eh, em, tzinfo=source_tz)
+    start_bcn = start_src.astimezone(bcn_tz)
+    end_bcn = end_src.astimezone(bcn_tz)
+    return start_bcn.strftime("%H:%M"), end_bcn.strftime("%H:%M"), tz_key, start_text, end_text
+
+
+def _parse_local_ts(ts):
+    try:
+        return datetime.strptime(str(ts), "%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError):
+        return None
+
+
+def use_row_for_plot(ts, day=None):
+    """Dashboard plot filter: today only, optionally Barcelona RTH only."""
+    dt = _parse_local_ts(ts)
+    if not dt:
+        return False
+    target_day = date.fromisoformat(str(day)) if day else date.today()
+    if dt.date() != target_day:
+        return False
+    if not USE_RTH_ONLY:
+        return True
+    start_bcn, end_bcn, *_ = rth_window_bcn(target_day)
+    sh, sm = _parse_clock(start_bcn)
+    eh, em = _parse_clock(end_bcn)
+    start = dt.replace(hour=sh, minute=sm, second=0, microsecond=0)
+    end = dt.replace(hour=eh, minute=em, second=0, microsecond=0)
+    return start <= dt <= end
+
+
+def session_underlying_csv_bytes(ticker="MU", day=None):
+    """Build the legacy CSV shape expected by the dashboard from a session folder."""
+    day = day or store.latest_session_day(ticker)
+    if not day:
+        return None, None
+    path = store.underlying_path(ticker, day)
+    if not path.exists():
+        if store.read_index(ticker, day):
+            out = io.StringIO()
+            writer = csv.DictWriter(out, fieldnames=LEGACY_UNDERLYING_CSV_HEADER, extrasaction="ignore")
+            writer.writeheader()
+            return out.getvalue().encode("utf-8"), store.session_dir(ticker, day)
+        return None, None
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=LEGACY_UNDERLYING_CSV_HEADER, extrasaction="ignore")
+    writer.writeheader()
+    with open(path, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f, skipinitialspace=True):
+            if not use_row_for_plot(row.get("timestamp", ""), day):
+                continue
+            writer.writerow({
+                "timestamp": row.get("timestamp", ""),
+                "underlying_symbol": safe_symbol_token(ticker),
+                "UNDERLYING_LAST": row.get("UNDERLYING_LAST", ""),
+                "UNDERLYING_BID": row.get("UNDERLYING_BID", ""),
+                "UNDERLYING_ASK": row.get("UNDERLYING_ASK", ""),
+                "UNDERLYING_MARK": row.get("UNDERLYING_MARK", ""),
+                "UNDERLYING_VOLUME": row.get("UNDERLYING_VOLUME", ""),
+            })
+    return out.getvalue().encode("utf-8"), path
+
+
+def latest_session_underlying_bid(ticker="MU"):
+    day = store.latest_session_day(ticker)
+    if not day:
+        return None
+    idx = store.read_index(ticker, day) or {}
+    normalized = bool(idx.get("normalized"))
+    path = store.underlying_path(ticker, day)
+    if not path.exists():
+        return None
+    with open(path, newline="", encoding="utf-8") as f:
+        for row in reversed(list(csv.DictReader(f, skipinitialspace=True))):
+            for key in ("UNDERLYING_BID", "UNDERLYING_LAST", "UNDERLYING_MARK"):
+                raw = row.get(key)
+                price = _num(raw) if normalized else parse_live_price(raw, key)
+                if price is not None and price > 0:
+                    return price
+    return None
+
+
+def latest_session_option_quote(symbol):
+    if not symbol:
+        return None
+    ticker = option_underlying_symbol(symbol) or "MU"
+    day = store.latest_session_day(ticker)
+    idx = store.read_index(ticker, day) if day else None
+    if not idx:
+        return None
+    wanted = store.safe_token(symbol)
+    contract = next((c for c in idx.get("contracts", []) if store.safe_token(c.get("symbol")) == wanted), None)
+    if not contract:
+        return None
+    path = store.session_dir(ticker, day) / contract.get("file", "")
+    if not path.exists():
+        return None
+    normalized = bool(idx.get("normalized"))
+    with open(path, newline="", encoding="utf-8") as f:
+        for row in reversed(list(csv.DictReader(f, skipinitialspace=True))):
+            bid = _num(row.get("BID")) if normalized else parse_option_price(row.get("BID"), "BID")
+            if bid is None or bid <= 0:
+                continue
+            return {
+                "symbol": symbol,
+                "timestamp": row.get("timestamp", ""),
+                "bid": bid,
+                "ask": None,
+                "mark": None,
+                "last": None,
+                "mid": round(bid, 4),
+                "source": "tos_session_bid",
+                "iv": parse_percent_decimal(row.get("IMPL_VOL")),
+                "greeks": {
+                    "delta": normalize_live_greek("DELTA", row.get("DELTA")),
+                    "gamma": normalize_live_greek("GAMMA", row.get("GAMMA")),
+                    "theta": normalize_live_greek("THETA", row.get("THETA")),
+                    "vega": normalize_live_greek("VEGA", row.get("VEGA")),
+                },
+                "raw": {
+                    "DELTA": row.get("DELTA"),
+                    "GAMMA": row.get("GAMMA"),
+                    "THETA": row.get("THETA"),
+                    "VEGA": row.get("VEGA"),
+                    "IMPL_VOL": row.get("IMPL_VOL"),
+                },
+            }
+    return None
+
+
+def _num(value):
+    """Plain float from a normalized tape cell (already in real units), else None."""
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
 
 def _scale_option_price(value, field="BID"):
     """Option price from a tape cell, de-scaling the legacy comma-strip x100."""
@@ -77,9 +264,10 @@ def session_strikes(ticker, day):
         except (TypeError, ValueError):
             pass
     out = [int(s) if s.is_integer() else s for s in sorted(strikes)]
+    normalized = bool(idx.get("normalized"))
     underlying = None
     for _ts, raw in store.read_series(store.underlying_path(ticker, day), "UNDERLYING_BID"):
-        ub = parse_live_price(raw, "UNDERLYING_BID")
+        ub = _num(raw) if normalized else parse_live_price(raw, "UNDERLYING_BID")
         if ub:
             underlying = ub  # most recent valid underlying bid
     atm = min(out, key=lambda s: abs(s - underlying)) if out and underlying else None
@@ -92,8 +280,46 @@ def session_strikes(ticker, day):
     }
 
 
-def session_premium(ticker, day, strike):
-    """Call/put BID series + underlying from a per-contract session folder. None if no folder."""
+# Per-contract session CSVs are named <ROOT><YYMMDD><C|P><STRIKE>.csv,
+# e.g. MU260702C1130.csv, SPXW260630P7500.csv, NDXP260630C7500.csv.
+_CONTRACT_RE = re.compile(r"^([A-Za-z]+)(\d{6})([CP])(\d+(?:\.\d+)?)\.csv$")
+
+
+def _contract_filename_meta(name):
+    """Parse a per-contract CSV name into root/expiration/type/strike, or None."""
+    m = _CONTRACT_RE.match(name)
+    if not m:
+        return None
+    root, yymmdd, typ, strike = m.groups()
+    try:
+        return {
+            "root": root,
+            "expiration": f"20{yymmdd[0:2]}-{yymmdd[2:4]}-{yymmdd[4:6]}",
+            "type": "CALL" if typ.upper() == "C" else "PUT",
+            "strike": float(strike),
+        }
+    except ValueError:
+        return None
+
+
+def session_expirations(ticker, day):
+    """Distinct option expirations (ISO) recorded in a session folder, sorted."""
+    sdir = store.session_dir(ticker, day)
+    exps = set()
+    if sdir.exists():
+        for f in sdir.glob("*.csv"):
+            meta = _contract_filename_meta(f.name)
+            if meta:
+                exps.add(meta["expiration"])
+    return sorted(exps)
+
+
+def session_premium(ticker, day, strike, expiration=None):
+    """Call/put BID series + underlying from a per-contract session folder. None if no folder.
+
+    `expiration` (ISO) optionally narrows the match when a session holds more than
+    one expiration for the same strike.
+    """
     idx = store.read_index(ticker, day)
     if not idx:
         return None
@@ -112,11 +338,29 @@ def session_premium(ticker, day, strike):
 
     sdir = store.session_dir(ticker, day)
 
+    # Fallback: the index may be empty/stale while the per-contract CSVs exist on
+    # disk. Resolve the strike's files by their name, e.g. MU260702C1130.csv.
+    if call_file is None and put_file is None and sdir.exists():
+        for f in sorted(sdir.glob("*.csv")):
+            meta = _contract_filename_meta(f.name)
+            if not meta or meta["strike"] != target:
+                continue
+            if expiration and meta["expiration"] != expiration:
+                continue
+            if meta["type"] == "CALL":
+                call_file = f.name
+            else:
+                put_file = f.name
+
+    normalized = bool(idx.get("normalized"))
+
     def leg_series(fname):
         out_t, out_v = [], []
         if fname:
             for ts, raw in store.read_series(sdir / fname, "BID"):
-                price = _scale_option_price(raw, "BID")
+                if not use_row_for_plot(ts, day):
+                    continue
+                price = _num(raw) if normalized else _scale_option_price(raw, "BID")
                 if price is not None:
                     out_t.append(ts)
                     out_v.append(round(price, 4))
@@ -124,9 +368,9 @@ def session_premium(ticker, day, strike):
 
     under_t, under_b, seen = [], [], set()
     for ts, raw in store.read_series(store.underlying_path(ticker, day), "UNDERLYING_BID"):
-        if ts in seen:
+        if ts in seen or not use_row_for_plot(ts, day):
             continue
-        ub = parse_live_price(raw, "UNDERLYING_BID")
+        ub = _num(raw) if normalized else parse_live_price(raw, "UNDERLYING_BID")
         if ub:
             seen.add(ts)
             under_t.append(ts)
@@ -163,7 +407,10 @@ def parse_live_price(value, field=None):
 
 
 def latest_live_underlying_bid(ticker="MU"):
-    """Read the latest live UNDERLYING_BID from the collector CSV."""
+    """Read the latest live UNDERLYING_BID from session storage, falling back to legacy CSV."""
+    session_bid = latest_session_underlying_bid(ticker)
+    if session_bid is not None:
+        return session_bid
     csv_path = latest_live_csv(ticker)
     if not csv_path.exists():
         raise ValueError(f"CSV live no existe: {csv_path}")
@@ -182,6 +429,15 @@ def latest_live_underlying_bid(ticker="MU"):
 
     raise ValueError(f"No hay UNDERLYING_BID valido en {csv_path}")
 
+
+def request_spot_or_none(ticker, spot_arg=None):
+    """Explicit spot wins; otherwise use live tape if available, else let chain logic infer it."""
+    if spot_arg not in (None, ""):
+        return float(spot_arg)
+    try:
+        return latest_live_underlying_bid(ticker)
+    except ValueError:
+        return None
 
 def parse_option_price(value, field=None):
     """Normalize option RTD prices from TOS.
@@ -256,7 +512,10 @@ def scale_short_live_greeks(quote, fallback, mult):
     return result
 
 def latest_live_option_quote(symbol):
-    """Return latest normalized live quote for one option symbol from the collector CSV."""
+    """Return latest normalized live quote for one option symbol."""
+    session_quote = latest_session_option_quote(symbol)
+    if session_quote:
+        return session_quote
     if not symbol:
         return None
     csv_path = latest_live_csv(option_underlying_symbol(symbol) or "MU")
@@ -400,6 +659,35 @@ def flatten_strategy_options(strategies):
     return options
 
 
+
+def build_payload_with_chain_refresh(ticker, expiration=None, dte=None, levels=DEFAULT_LEVELS, spot=None):
+    """Build near-ATM payload, fetching the needed Yahoo chain if no local CSV exists."""
+    try:
+        return build_payload(ticker=ticker, expiration=expiration, dte=dte, levels=levels, spot=spot)
+    except (FileNotFoundError, ValueError):
+        if expiration:
+            fetch_and_save_expiration(ticker, expiration)
+        elif dte is None:
+            fetch_and_save_nearest(ticker)
+        else:
+            raise
+        return build_payload(ticker=ticker, expiration=expiration, dte=dte, levels=levels, spot=spot)
+
+
+def current_chart_config():
+    """Read chart range settings from config.py for the browser."""
+    import config as runtime_config
+    runtime_config = importlib.reload(runtime_config)
+    start_bcn, end_bcn, tz_key, source_start, source_end = rth_window_bcn(runtime_config=runtime_config)
+    return {
+        "use_rth_only": bool(getattr(runtime_config, "USE_RTH_ONLY", True)),
+        "rth_start_bcn": start_bcn,
+        "rth_end_bcn": end_bcn,
+        "rth_timezone": tz_key,
+        "rth_start": source_start,
+        "rth_end": source_end,
+    }
+
 class TosLiveHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(PROJECT_ROOT), **kwargs)
@@ -432,8 +720,20 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/live-strikes":
             self.serve_strikes(parse_qs(parsed.query))
             return
+        if parsed.path == "/api/live-expirations":
+            self.serve_session_expirations(parse_qs(parsed.query))
+            return
         if parsed.path == "/api/start":
             self.serve_start(parse_qs(parsed.query))
+            return
+        if parsed.path == "/api/expirations":
+            self.serve_expirations(parse_qs(parsed.query))
+            return
+        if parsed.path == "/api/chart-config":
+            self._send_json(current_chart_config())
+            return
+        if parsed.path == "/api/tickers":
+            self._send_json({"tickers": list(TICKERS)})
             return
         if parsed.path in ("/", ""):
             self.path = "/outputs/tos_live_underlying.html"
@@ -451,8 +751,8 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
             levels = first("levels")
             ticker = first("ticker") or "MU"
             spot_arg = first("spot")
-            spot = float(spot_arg) if spot_arg not in (None, "") else latest_live_underlying_bid(ticker)
-            payload, *_ = build_payload(
+            spot = request_spot_or_none(ticker, spot_arg)
+            payload, *_ = build_payload_with_chain_refresh(
                 ticker=ticker,
                 expiration=expiration,
                 dte=int(dte) if dte not in (None, "") else None,
@@ -482,8 +782,8 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
             rate = float(first("r")) if first("r") not in (None, "") else DEFAULT_RATE
             ticker = first("ticker") or "MU"
             spot_arg = first("spot")
-            spot = float(spot_arg) if spot_arg not in (None, "") else latest_live_underlying_bid(ticker)
-            payload, *_ = build_payload(
+            spot = request_spot_or_none(ticker, spot_arg)
+            payload, *_ = build_payload_with_chain_refresh(
                 ticker=ticker,
                 expiration=expiration,
                 dte=int(dte) if dte not in (None, "") else None,
@@ -536,8 +836,8 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
             self._send_json({"error": f"Sin prima live/Yahoo para la {missing} de {strike:g}."})
             return
 
-        call_is_live = (call_quote or {}).get("source", "").startswith("tos_live")
-        put_is_live = (put_quote or {}).get("source", "").startswith("tos_live")
+        call_is_live = (call_quote or {}).get("source", "").startswith("tos_")
+        put_is_live = (put_quote or {}).get("source", "").startswith("tos_")
         premium_source = "tos_live" if call_is_live and put_is_live else "yahoo_snapshot"
         dte_v = payload["dte"]
         if dte_v == 0 and premium_source != "tos_live":
@@ -644,8 +944,8 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
             put_strike = float(first("put_strike")) if first("put_strike") not in (None, "") else None
             call_strike = float(first("call_strike")) if first("call_strike") not in (None, "") else None
             ticker = first("ticker") or "MU"
-            spot = latest_live_underlying_bid(ticker)
-            payload, *_ = build_payload(
+            spot = request_spot_or_none(ticker)
+            payload, *_ = build_payload_with_chain_refresh(
                 ticker=ticker,
                 expiration=expiration,
                 dte=int(dte) if dte not in (None, "") else None,
@@ -712,8 +1012,21 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
         ACTIVE_SYMBOLS_FILE.write_text(json.dumps(active, indent=2), encoding="utf-8")
         self._send_json({"ok": True, "path": str(ACTIVE_SYMBOLS_FILE), "added": record, **active})
 
+    def serve_expirations(self, query):
+        """Live expirations (date + DTE today) from Yahoo, dropping past ones."""
+        ticker = (query.get("ticker") or ["MU"])[0]
+        try:
+            import yfinance as yf
+            from get_option_chain import expiration_dte
+            exps = list(yf.Ticker(yahoo_ticker_symbol(ticker)).options)
+            out = [{"expiration": e, "dte": expiration_dte(e)}
+                   for e in sorted(exps, key=expiration_dte) if expiration_dte(e) >= 0]
+            self._send_json({"ticker": ticker, "expirations": out})
+        except Exception as exc:  # noqa: BLE001
+            self._send_json({"ticker": ticker, "expirations": [], "error": str(exc)})
+
     def serve_start(self, query):
-        """Start/reset: nearest expiration -> ATM -> 12 strikes each side -> all legs to active_symbols.json.
+        """Start/reset: nearest expiration -> ATM -> RECORD_LEVELS strikes each side -> all legs.
 
         Reuses build_payload (chain -> nearest DTE -> spot/ATM -> levels). Writes the full ladder
         (call+put per strike) so the collector subscribes the whole ladder for the session.
@@ -722,13 +1035,14 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
             vals = query.get(key)
             return vals[0] if vals else None
 
-        ticker = first("ticker") or "MU"
-        levels = int(first("levels")) if first("levels") not in (None, "") else DEFAULT_LEVELS
+        levels = int(first("levels")) if first("levels") not in (None, "") else RECORD_LEVELS
         refresh = (first("refresh") or "1").lower() not in ("0", "false", "no")
-        spot_arg = first("spot")
-        spot = float(spot_arg) if spot_arg not in (None, "") else None
+        single = first("ticker")  # optional: anchor just one ticker
         try:
-            result = ladder.anchor_ladder(ticker=ticker, levels=levels, refresh=refresh, spot=spot, mode="start")
+            if single:
+                result = ladder.anchor_ladder(ticker=single, levels=levels, refresh=refresh, mode="start")
+            else:
+                result = ladder.anchor_all(TICKERS, levels=levels, refresh=refresh, mode="start")
         except ValueError as exc:
             self.send_error(404, str(exc))
             return
@@ -749,6 +1063,7 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
 
         ticker = first("ticker") or "MU"
         day = first("date")
+        expiration = first("expiration")
         try:
             target = float(first("strike"))
         except (TypeError, ValueError):
@@ -757,7 +1072,7 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
 
         # Folder-first: per-contract session; fall back to legacy flat CSV.
         folder_day = day or store.latest_session_day(ticker)
-        res = session_premium(ticker, folder_day, target) if folder_day else None
+        res = session_premium(ticker, folder_day, target, expiration) if folder_day else None
         if res and (res["call"]["t"] or res["put"]["t"]):
             self._send_json(res)
             return
@@ -830,6 +1145,13 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
         days = sorted(days)
         self._send_json({"days": days, "latest": days[-1] if days else None})
 
+    def serve_session_expirations(self, query):
+        """List option expirations (ISO) recorded for a ticker on a session day."""
+        ticker = (query.get("ticker") or ["MU"])[0]
+        day = (query.get("date") or [None])[0] or store.latest_session_day(ticker)
+        exps = session_expirations(ticker, day) if day else []
+        self._send_json({"date": day or "", "expirations": exps})
+
     def serve_strikes(self, query):
         """List the strikes present in a session day's live CSV."""
         ticker = (query.get("ticker") or ["MU"])[0]
@@ -886,7 +1208,21 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
     def serve_tos_csv(self, query=None):
         query = query or {}
         ticker = (query.get("ticker") or [None])[0] or read_active_book().get("underlying") or "MU"
-        csv_path = latest_live_csv(ticker)
+        day = (query.get("date") or [None])[0] or date.today().isoformat()
+
+        data, source_path = session_underlying_csv_bytes(ticker, day)
+        if data is not None:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("X-Source", str(source_path.name))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
+        csv_path = live_csv_file(ticker, day) if day else latest_live_csv(ticker)
+        if not csv_path.exists():
+            csv_path = latest_live_csv(ticker)
         if not csv_path.exists():
             self.send_error(404, f"CSV not found: {csv_path}")
             return
@@ -894,9 +1230,9 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/csv; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
+        self.send_header("X-Source", str(csv_path.name))
         self.end_headers()
         self.wfile.write(data)
-
 
 def main():
     server = ThreadingHTTPServer((HOST, PORT), TosLiveHandler)
@@ -910,3 +1246,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
