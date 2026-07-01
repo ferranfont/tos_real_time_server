@@ -262,8 +262,9 @@
     .pnl-table tfoot td:first-child { font-weight: 500; color: #cbd5e1; letter-spacing: .02em; }
     .pnl-ls-s { color: var(--red); font-weight: 600; }
     .pnl-ls-l { color: var(--green); font-weight: 600; }
-    .pnl-pos { color: var(--green); }
-    .pnl-neg { color: var(--red); }
+    .pnl-table td.pnl-pos, .pnl-table td.pnl-neg { font-size: 14px; font-weight: 800; }
+    .pnl-table td.pnl-pos { color: var(--green); }
+    .pnl-table td.pnl-neg { color: var(--red); }
     /* Gamma walls + delta box (floating, left side). */
     .walls-box {
       position: fixed; left: auto; right: 400px; top: 88px; z-index: 24;
@@ -281,10 +282,15 @@
     .strat-mode .walls-box { display: none; }
     .walls-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
     .walls-title { color: #e5e7eb; font-size: 13px; font-weight: 500; }
-    .walls-drag-hint { margin-left: 8px; color: #d8b4fe; font-size: 19px; font-weight: 900; letter-spacing: -3px; vertical-align: -3px; cursor: move; text-shadow: 0 0 10px rgba(168,85,247,.45); }
+    .walls-drag-hint { margin-left: 9px; color: #ffffff; font-size: 24px; font-weight: 900; letter-spacing: -4px; vertical-align: -4px; cursor: move; text-shadow: 0 0 5px rgba(255,255,255,.72), 0 0 14px rgba(34,211,238,.45); }
     .walls-meta { color: #94a3b8; font-size: 11px; }
     .walls-symbol { color: var(--cyan); font-size: 14px; font-weight: 700; }
     .walls-time { margin-left: 6px; }
+    .walls-head-right { display: inline-flex; align-items: center; gap: 7px; }
+    .walls-clock { cursor: pointer; background: transparent; border: none; padding: 0; margin: 0; display: inline-flex; align-items: center; color: #ffffff; opacity: .9; line-height: 0; }
+    .walls-clock svg { width: 17px; height: 17px; }
+    .walls-clock:hover { opacity: 1; color: #ffffff; filter: drop-shadow(0 0 5px rgba(255,255,255,.45)); }
+    .walls-clock.active { opacity: 1; color: #ffffff; filter: drop-shadow(0 0 5px rgba(255,255,255,.5)) drop-shadow(0 0 6px rgba(34,211,238,.55)); }
     .walls-levels { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
     .walls-lvl { display: flex; align-items: center; justify-content: space-between; }
     .walls-lvl .k { color: #94a3b8; font-size: 10px; font-weight: 400; text-transform: uppercase; letter-spacing: .03em; }
@@ -691,7 +697,7 @@
   </div>
 
   <aside id="wallsBox" class="walls-box" hidden>
-    <div class="walls-head"><span><span class="walls-title">Gamma Walls</span><span class="walls-drag-hint" title="Arrastrar">&vellip;&vellip;</span></span><span id="wallsMeta" class="walls-meta"></span></div>
+    <div class="walls-head"><span><span class="walls-title">Gamma Walls</span><span class="walls-drag-hint" title="Arrastrar">&vellip;&vellip;</span></span><span class="walls-head-right"><span id="wallsMeta" class="walls-meta"></span><button id="wallsHistBtn" class="walls-clock" type="button" title="Historico de gamma walls (Long/Short a lo largo de la sesion)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button></span></div>
     <div id="wallsWalls" class="walls-levels"></div>
     <table class="walls-table">
       <thead><tr><th>Strike</th><th>Gamma</th><th>5m</th><th>15m</th><th>30m</th></tr></thead>
@@ -733,6 +739,7 @@
 
   <script>
     const nf2 = new Intl.NumberFormat("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const nf1 = new Intl.NumberFormat("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     const nf0 = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 });
 
     const OPTION_CHAIN = [
@@ -785,7 +792,7 @@
       } catch (_) {}
       return null;
     }
-    const state = { rows: [], symbol: initialSymbol(), file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null, payoffLoading: false, lastPayoffRefreshKey: null, premium: null, premiumPast: false, premiumDay: null, selected: [], series: {}, anchorEntry: null, anchorActive: false, showGamma: false, showWalls: false, gamma: null, latestDay: null, previousClose: null, hideUnderlying: false, premiumPct: false, expirations: null, tickers: [], rangeMode: initialRangeMode(), chartConfig: { use_rth_only: true, rth_start_bcn: "15:30", rth_end_bcn: "22:50", rth_timezone: "BCN" }, chartRangeKey: "" };
+    const state = { rows: [], symbol: initialSymbol(), file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null, payoffLoading: false, lastPayoffRefreshKey: null, premium: null, premiumPast: false, premiumDay: null, selected: [], series: {}, anchorEntry: null, anchorActive: false, showGamma: false, showWalls: false, showGammaHistory: false, gamma: null, latestDay: null, previousClose: null, hideUnderlying: false, premiumPct: false, expirations: null, tickers: [], rangeMode: initialRangeMode(), chartConfig: { use_rth_only: true, rth_start_bcn: "15:30", rth_end_bcn: "22:50", rth_timezone: "BCN" }, chartRangeKey: "" };
     const $ = id => document.getElementById(id);
 
     function parseCsv(text) {
@@ -815,6 +822,7 @@
       return Number.isFinite(n) ? n : null;
     }
     function fmt2(v) { return v == null ? "--" : nf2.format(v); }
+    function fmt1(v) { return v == null ? "--" : nf1.format(v); }
     function fmtGroup0(v) {
       if (v == null) return "--";
       const n = Math.round(Number(v));
@@ -1869,7 +1877,7 @@
       const diffPct = Number.isFinite(prevClose) && prevClose > 0 && Number.isFinite(last.spot) ? (last.spot / prevClose - 1) * 100 : null;
       $("spotValue").textContent = fmt2(last.spot);
       $("spotTime").textContent = `updated ${shortTime(last.timestamp)}`;
-      $("spotChange").textContent = diffPct == null ? "" : `${diffPct >= 0 ? "+" : ""}${fmt2(diffPct)}%`;
+      $("spotChange").textContent = diffPct == null ? "" : `${diffPct >= 0 ? "+" : ""}${fmt1(diffPct)}%`;
       $("spotChange").title = diffPct == null ? "" : `vs previous close ${fmt2(prevClose)}`;
       $("spotChange").className = `chg ${diffPct == null ? "" : diffPct >= 0 ? "pos" : "neg"}`.trim();
       buildStrikeTable();
@@ -2220,7 +2228,7 @@
            state.gamma.major_positive, state.gamma.major_negative].filter(Number.isFinite)
         : [];
       // Include the Long/Short gamma migration history so those lines are never clipped.
-      if (state.showWalls && Array.isArray(state.gammaHistory)) {
+      if (state.showWalls && state.showGammaHistory && Array.isArray(state.gammaHistory)) {
         for (const p of state.gammaHistory) {
           if (Number.isFinite(p.major_long_gamma)) wallLevels.push(p.major_long_gamma);
           if (Number.isFinite(p.major_short_gamma)) wallLevels.push(p.major_short_gamma);
@@ -2383,18 +2391,18 @@
       const wallShapes = [], wallAnnos = [];
       if (state.showWalls && state.gamma) {
         for (const w of [
-          { v: state.gamma.major_long_gamma, color: "#2dd4bf", label: "Long Gamma" },
-          { v: state.gamma.major_short_gamma, color: "#a855f7", label: "Short Gamma" },
-          { v: state.gamma.major_positive, color: "#2dd4bf", label: "Major Positive" },
-          { v: state.gamma.major_negative, color: "#a855f7", label: "Major Negative" },
-          { v: state.gamma.gamma_flip, color: "#ffd400", label: "Flip" },
+          { v: state.gamma.major_long_gamma, color: "rgba(45,212,191,0.5)", label: "Long Gamma" },
+          { v: state.gamma.major_short_gamma, color: "rgba(168,85,247,0.5)", label: "Short Gamma" },
+          { v: state.gamma.major_positive, color: "rgba(45,212,191,0.5)", label: "Major Positive" },
+          { v: state.gamma.major_negative, color: "rgba(168,85,247,0.5)", label: "Major Negative" },
+          { v: state.gamma.gamma_flip, color: "rgba(255,212,0,0.5)", label: "Flip" },
         ]) {
           if (!Number.isFinite(w.v)) continue;
           wallShapes.push({ type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: w.v, y1: w.v,
-            line: { color: w.color, width: 1.5, dash: "dash" }, layer: "above" });
+            line: { color: w.color, width: 1, dash: "dash" }, layer: "above" });
           wallAnnos.push({ xref: "paper", yref: "y", x: 0, y: w.v, xanchor: "left", yanchor: "middle",
             text: `${w.label} ${fmtStrike0(w.v)}`, showarrow: false, font: { color: w.color, size: 10, weight: 700 },
-            bgcolor: "rgba(11,14,20,0.85)", bordercolor: w.color, borderwidth: 1, borderpad: 2 });
+            bgcolor: "rgba(11,14,20,0.5)", bordercolor: w.color, borderwidth: 1, borderpad: 2 });
         }
       }
       const layout = {
@@ -2435,7 +2443,7 @@
       // Long/Short gamma-wall migration over the day: solid, faint (opacity 0.4),
       // thin (width 1) lines on the price axis, drawn under everything else.
       const gammaHistTraces = [];
-      if (state.showWalls && Array.isArray(state.gammaHistory) && state.gammaHistory.length) {
+      if (state.showWalls && state.showGammaHistory && Array.isArray(state.gammaHistory) && state.gammaHistory.length) {
         const ht = state.gammaHistory.map(p => p.t);
         const mkLine = (key, color, label) => {
           const yv = state.gammaHistory.map(p => Number.isFinite(p[key]) ? p[key] : null);
@@ -2581,7 +2589,7 @@
         if (state.httpMode) await loadHttpCsv();
         else if (state.file) await loadFile(state.file);
         if (state.selected.length) { await refreshSelectedSeries(); if (!state.stratMode && state.rows.length) render(); }
-        if (state.showGamma || state.showWalls) { await loadGamma(); if (state.showWalls) await loadGammaHistory(); if (!state.stratMode && state.rows.length) render(); }
+        if (state.showGamma || state.showWalls) { await loadGamma(); if (state.showWalls && state.showGammaHistory) await loadGammaHistory(); if (!state.stratMode && state.rows.length) render(); }
       } catch (err) {
         $("status").className = "status err";
         $("status").textContent = "error CSV";
@@ -2599,13 +2607,23 @@
       state.showWalls = !state.showWalls;
       $("wallsToggle").classList.toggle("active", state.showWalls);
       $("wallsBox").hidden = !state.showWalls;
-      if (state.showWalls) { await loadGamma(); await loadGammaHistory(); }
+      if (state.showWalls) { await loadGamma(); if (state.showGammaHistory) await loadGammaHistory(); }
       else { state.gammaHistory = null; if (!state.showGamma) state.gamma = null; }
+      render();
+    });
+    // Clock in the walls-box header: toggles the Long/Short gamma-wall history
+    // (migration lines over the session). Hidden by default; shown only on click.
+    $("wallsHistBtn").addEventListener("click", async ev => {
+      ev.stopPropagation();
+      state.showGammaHistory = !state.showGammaHistory;
+      $("wallsHistBtn").classList.toggle("active", state.showGammaHistory);
+      if (state.showGammaHistory && !state.gammaHistory) await loadGammaHistory();
       render();
     });
     function renderWallsBox() {
       const box = $("wallsBox");
       if (!box || box.hidden) return;
+      const histBtn = $("wallsHistBtn"); if (histBtn) histBtn.classList.toggle("active", !!state.showGammaHistory);
       const g = state.gamma;
       if (!g || !Array.isArray(g.strikes) || !g.strikes.length) {
         $("wallsMeta").textContent = "sin gamma";
@@ -2668,6 +2686,7 @@
       if (!box || !head) return;
       let on = false, sx = 0, sy = 0, x0 = 0, y0 = 0;
       head.addEventListener("mousedown", ev => {
+        if (ev.target.closest("#wallsHistBtn")) return;  // clic en el reloj no arrastra
         const r = box.getBoundingClientRect();
         box.style.right = "auto"; box.style.left = r.left + "px"; box.style.top = r.top + "px";
         on = true; x0 = r.left; y0 = r.top; sx = ev.clientX; sy = ev.clientY;
