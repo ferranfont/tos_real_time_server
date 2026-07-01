@@ -106,10 +106,13 @@
       box-shadow: 0 20px 45px rgba(0,0,0,0.36);
       backdrop-filter: blur(14px);
     }
+    .spot-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .spot-logo { width: 28px; height: 28px; border-radius: 6px; object-fit: contain; background: rgba(255,255,255,.94); padding: 2px; flex: 0 0 auto; }
+    .spot-logo[hidden] { display: none; }
     .spot-v {
       margin-top: 4px;
       color: var(--cyan);
-      font-size: 38px;
+      font-size: 33px;
       line-height: 1;
       font-weight: 900;
       font-variant-numeric: tabular-nums;
@@ -599,7 +602,7 @@
     .mode-pills { display: none; }
     .right-tools select { display: none; }
     .pct-toggle { top: 68px; right: 330px; bottom: auto; width: 36px; min-width: 36px; padding: 0; }
-    #toggleUnderlying { top: 105px; right: 42px; bottom: auto; width: 82px; min-width: 82px; padding: 0 5px; }
+    #toggleUnderlying { top: 105px; right: 35px; bottom: auto; width: 82px; min-width: 82px; padding: 0 5px; }
     .ul-toggle.on { border-color: var(--green); background: rgba(0,230,118,.18); color: #fff; }
     .session-toggle { left: 6px; right: auto; top: auto; bottom: 8px; width: 56px; min-width: 56px; height: 24px; padding: 0; }
     .status {
@@ -637,7 +640,7 @@
       .side-panel { display: none; }
       .option-chain-panel { left: 12px; right: 12px; top: 96px; bottom: 120px; width: auto; }
       .spot-card { left: 18px; right: 18px; bottom: 48px; width: auto; min-width: 0; }
-      .spot-v { font-size: 38px; }
+      .spot-v { font-size: 33px; }
     }
   </style>
 </head>
@@ -660,13 +663,13 @@
   </div>
 
   <aside class="spot-card">
-    <div class="spot-v" id="spotValue">--</div>
+    <div class="spot-main"><img id="spotLogo" class="spot-logo" alt="" hidden><div class="spot-v" id="spotValue">--</div></div>
     <div class="spot-meta"><span id="spotTime">sin lectura</span><span id="spotChange" class="chg"></span></div>
   </aside>
 
   <aside class="strike-card" id="strikeCard">
     <div class="strike-head">
-      <span class="strike-brand"><img id="strikeTitleLogo" class="strike-title-logo" alt="" hidden><span class="strike-title" id="strikeTitle">NDX</span><button id="clearOptionsBtn" class="clear-options-btn" type="button" title="Borrar puts/calls seleccionadas">Reset</button></span>
+      <span class="strike-brand"><span class="strike-title" id="strikeTitle">NDX</span><button id="clearOptionsBtn" class="clear-options-btn" type="button" title="Borrar puts/calls seleccionadas">Reset</button></span>
       <select id="strikeExp" class="strike-ctl" aria-label="Vencimiento" title="Vencimiento (expiracion)"></select>
       <input type="date" id="strikeDay" class="strike-ctl" aria-label="Sesion" title="Dia de sesion">
     </div>
@@ -782,7 +785,7 @@
       } catch (_) {}
       return null;
     }
-    const state = { rows: [], symbol: initialSymbol(), file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null, payoffLoading: false, lastPayoffRefreshKey: null, premium: null, premiumPast: false, premiumDay: null, selected: [], series: {}, anchorEntry: null, anchorActive: false, showGamma: false, showWalls: false, gamma: null, latestDay: null, hideUnderlying: false, premiumPct: false, expirations: null, tickers: [], rangeMode: initialRangeMode(), chartConfig: { use_rth_only: true, rth_start_bcn: "15:30", rth_end_bcn: "22:50", rth_timezone: "BCN" }, chartRangeKey: "" };
+    const state = { rows: [], symbol: initialSymbol(), file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null, payoffLoading: false, lastPayoffRefreshKey: null, premium: null, premiumPast: false, premiumDay: null, selected: [], series: {}, anchorEntry: null, anchorActive: false, showGamma: false, showWalls: false, gamma: null, latestDay: null, previousClose: null, hideUnderlying: false, premiumPct: false, expirations: null, tickers: [], rangeMode: initialRangeMode(), chartConfig: { use_rth_only: true, rth_start_bcn: "15:30", rth_end_bcn: "22:50", rth_timezone: "BCN" }, chartRangeKey: "" };
     const $ = id => document.getElementById(id);
 
     function parseCsv(text) {
@@ -1794,7 +1797,7 @@
       const symbol = String(state.symbol || "--").toUpperCase();
       const el = $("strikeTitle");
       if (el) el.textContent = symbol;
-      const logo = $("strikeTitleLogo");
+      const logo = $("spotLogo");
       if (!logo || !state.symbol) return;
       const src = `/data/logos/${encodeURIComponent(symbol)}.png?v=3`;
       if (logo.getAttribute("src") !== src) logo.src = src;
@@ -1862,11 +1865,13 @@
         return;
       }
       $("empty").style.display = "none";
-      const diff = prev ? last.spot - prev.spot : null;
+      const prevClose = Number(state.previousClose);
+      const diffPct = Number.isFinite(prevClose) && prevClose > 0 && Number.isFinite(last.spot) ? (last.spot / prevClose - 1) * 100 : null;
       $("spotValue").textContent = fmt2(last.spot);
       $("spotTime").textContent = `updated ${shortTime(last.timestamp)}`;
-      $("spotChange").textContent = diff == null ? "" : `${diff >= 0 ? "+" : ""}${fmt2(diff)}`;
-      $("spotChange").className = `chg ${diff == null ? "" : diff >= 0 ? "pos" : "neg"}`.trim();
+      $("spotChange").textContent = diffPct == null ? "" : `${diffPct >= 0 ? "+" : ""}${fmt2(diffPct)}%`;
+      $("spotChange").title = diffPct == null ? "" : `vs previous close ${fmt2(prevClose)}`;
+      $("spotChange").className = `chg ${diffPct == null ? "" : diffPct >= 0 ? "pos" : "neg"}`.trim();
       buildStrikeTable();
       if ($("sideSpot")) {
         $("sideSpot").textContent = fmt2(last.spot);
@@ -2211,8 +2216,16 @@
       const strikeOverlays = selectedStrikeOverlays(strikeLevels);
       // Left axis scales to the PRICE/spot and selected strike reference lines, not premiums.
       const wallLevels = (state.showWalls && state.gamma)
-        ? [state.gamma.major_long_gamma, state.gamma.major_short_gamma, state.gamma.gamma_flip].filter(Number.isFinite)
+        ? [state.gamma.major_long_gamma, state.gamma.major_short_gamma, state.gamma.gamma_flip,
+           state.gamma.major_positive, state.gamma.major_negative].filter(Number.isFinite)
         : [];
+      // Include the Long/Short gamma migration history so those lines are never clipped.
+      if (state.showWalls && Array.isArray(state.gammaHistory)) {
+        for (const p of state.gammaHistory) {
+          if (Number.isFinite(p.major_long_gamma)) wallLevels.push(p.major_long_gamma);
+          if (Number.isFinite(p.major_short_gamma)) wallLevels.push(p.major_short_gamma);
+        }
+      }
       const yScaleVals = [...y, ...strikeLevels, ...wallLevels];
       const ymin = Math.min(...yScaleVals), ymax = Math.max(...yScaleVals), span = Math.max(ymax - ymin, 0.01);
       const yLo = ymin - span * 0.18, yHi = ymax + span * 0.22;
@@ -2372,6 +2385,8 @@
         for (const w of [
           { v: state.gamma.major_long_gamma, color: "#2dd4bf", label: "Long Gamma" },
           { v: state.gamma.major_short_gamma, color: "#a855f7", label: "Short Gamma" },
+          { v: state.gamma.major_positive, color: "#2dd4bf", label: "Major Positive" },
+          { v: state.gamma.major_negative, color: "#a855f7", label: "Major Negative" },
           { v: state.gamma.gamma_flip, color: "#ffd400", label: "Flip" },
         ]) {
           if (!Number.isFinite(w.v)) continue;
@@ -2417,8 +2432,25 @@
       layout.showlegend = hasPremium;
       layout.legend = { orientation: "h", x: 0.5, y: 0.03, xanchor: "center", yanchor: "bottom",
         font: { color: "#cbd5e1", size: 10 }, bgcolor: "rgba(0,0,0,0)", borderwidth: 0 };
+      // Long/Short gamma-wall migration over the day: solid, faint (opacity 0.4),
+      // thin (width 1) lines on the price axis, drawn under everything else.
+      const gammaHistTraces = [];
+      if (state.showWalls && Array.isArray(state.gammaHistory) && state.gammaHistory.length) {
+        const ht = state.gammaHistory.map(p => p.t);
+        const mkLine = (key, color, label) => {
+          const yv = state.gammaHistory.map(p => Number.isFinite(p[key]) ? p[key] : null);
+          if (!yv.some(Number.isFinite)) return null;
+          return { x: ht, y: yv, type: "scatter", mode: "lines", name: label, yaxis: "y",
+            line: { color, width: 1, shape: "linear" }, opacity: 0.4, connectgaps: true,
+            showlegend: false, hovertemplate: `%{x|%d/%m %H:%M}<br>${label}: %{y:,.0f}<extra></extra>` };
+        };
+        const a = mkLine("major_long_gamma", "#2dd4bf", "Long γ");
+        const b = mkLine("major_short_gamma", "#a855f7", "Short γ");
+        if (a) gammaHistTraces.push(a);
+        if (b) gammaHistTraces.push(b);
+      }
       // Toggle: hide the underlying line, but keep the chart frame/axes visible.
-      const chartTraces = state.hideUnderlying ? [...premiumTraces] : [trace, ...premiumTraces];
+      const chartTraces = state.hideUnderlying ? [...gammaHistTraces, ...premiumTraces] : [...gammaHistTraces, trace, ...premiumTraces];
       if (state.hideUnderlying) {
         layout.shapes = [chartFrameShape, ...gammaShapes, ...wallShapes, ...strikeOverlays.shapes, ...anchorOverlay.shapes];
         layout.annotations = [...wallAnnos, ...strikeOverlays.annotations, ...anchorOverlay.annotations];
@@ -2472,7 +2504,24 @@
     async function loadFile(file) {
       if (!file) return;
       state.file = file;
+      state.previousClose = null;
       await loadText(await file.text(), "CSV");
+    }
+    async function loadPreviousClose() {
+      state.previousClose = null;
+      if (!state.httpMode) return;
+      try {
+        const url = new URL("/api/previous-close", location.origin);
+        url.searchParams.set("ticker", state.symbol);
+        const day = currentDay();
+        if (day) url.searchParams.set("date", day);
+        url.searchParams.set("ts", Date.now());
+        const data = await (await fetch(url, { cache: "no-store" })).json();
+        const close = Number(data && data.close);
+        state.previousClose = Number.isFinite(close) && close > 0 ? close : null;
+      } catch (_) {
+        state.previousClose = null;
+      }
     }
     async function loadHttpCsv() {
       // Underlying follows the selected session day (calendar), so a past day shows
@@ -2484,6 +2533,7 @@
       url.searchParams.set("ts", Date.now());
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await loadPreviousClose();
       await loadText(await res.text(), "HTTP CSV");
     }
     // Re-fetch the selected contracts' premium series (fresh latest tick), replacing
@@ -2514,12 +2564,24 @@
         state.gamma = (data && Array.isArray(data.strikes) && data.strikes.length) ? data : null;
       } catch (_) { state.gamma = null; }
     }
+    // Time series of the session-level gamma-wall levels (one point per snapshot),
+    // for the Long/Short gamma migration lines over the day.
+    async function loadGammaHistory() {
+      try {
+        const url = new URL("/api/gamma-history", location.origin);
+        url.searchParams.set("ticker", state.symbol);
+        if (currentDay()) url.searchParams.set("date", currentDay());
+        url.searchParams.set("ts", Date.now());
+        const data = await (await fetch(url, { cache: "no-store" })).json();
+        state.gammaHistory = (data && Array.isArray(data.points) && data.points.length) ? data.points : null;
+      } catch (_) { state.gammaHistory = null; }
+    }
     async function refreshFile() {
       try {
         if (state.httpMode) await loadHttpCsv();
         else if (state.file) await loadFile(state.file);
         if (state.selected.length) { await refreshSelectedSeries(); if (!state.stratMode && state.rows.length) render(); }
-        if (state.showGamma || state.showWalls) { await loadGamma(); if (!state.stratMode && state.rows.length) render(); }
+        if (state.showGamma || state.showWalls) { await loadGamma(); if (state.showWalls) await loadGammaHistory(); if (!state.stratMode && state.rows.length) render(); }
       } catch (err) {
         $("status").className = "status err";
         $("status").textContent = "error CSV";
@@ -2537,7 +2599,8 @@
       state.showWalls = !state.showWalls;
       $("wallsToggle").classList.toggle("active", state.showWalls);
       $("wallsBox").hidden = !state.showWalls;
-      if (state.showWalls) await loadGamma(); else if (!state.showGamma) state.gamma = null;
+      if (state.showWalls) { await loadGamma(); await loadGammaHistory(); }
+      else { state.gammaHistory = null; if (!state.showGamma) state.gamma = null; }
       render();
     });
     function renderWallsBox() {
@@ -2556,6 +2619,8 @@
       $("wallsWalls").innerHTML =
         lvl("Long Gamma", g.major_long_gamma, "walls-pos") +
         lvl("Short Gamma", g.major_short_gamma, "walls-neg") +
+        lvl("MAJOR POSITIVE", g.major_positive, "walls-pos") +
+        lvl("MAJOR NEGATIVE", g.major_negative, "walls-neg") +
         lvl("Flip", g.gamma_flip, "walls-flip");
       // Symmetric band around the ATM: N strikes above + ATM + N below (ATM centered).
       const spot = Number(g.spot);

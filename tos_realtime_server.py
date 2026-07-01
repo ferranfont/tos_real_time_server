@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import date, datetime
 
 import win32com.client as win32
+import pywintypes
 
 import ladder
 import normalize
@@ -41,6 +42,41 @@ OPTION_FIRST_VALUE_ROW = 6
 MAX_OPTION_ROWS = 140             # per-ticker option rows from A6 (RECORD_LEVELS=30 -> 61 strikes -> 122 legs)
 UNDERLYING_HEADER_ROW = 1
 UNDERLYING_VALUE_ROW = 2
+
+# Excel rechaza llamadas COM mientras esta ocupado (procesando UI o un tick RTD).
+# Es transitorio: reintentamos en vez de dejar que "La llamada fue rechazada por el
+# destinatario" (RPC_E_CALL_REJECTED) mate el recorder, sobre todo en el arranque.
+_COM_BUSY_HRESULTS = {
+    -2147418111,  # RPC_E_CALL_REJECTED  ("La llamada fue rechazada por el destinatario")
+    -2147417846,  # RPC_E_SERVERCALL_RETRYLATER
+}
+
+
+def com_call(fn, *args, attempts=40, delay=0.25, **kwargs):
+    """Ejecuta una llamada COM reintentando mientras Excel este momentaneamente ocupado."""
+    last = None
+    for _ in range(attempts):
+        try:
+            return fn(*args, **kwargs)
+        except pywintypes.com_error as exc:
+            if (exc.args[0] if exc.args else None) not in _COM_BUSY_HRESULTS:
+                raise
+            last = exc
+            time.sleep(delay)
+    if last is not None:
+        raise last
+
+
+def cell_set_value(ws, row, col, value):
+    com_call(lambda: setattr(ws.Cells(row, col), "Value", value))
+
+
+def cell_set_formula(ws, row, col, formula):
+    com_call(lambda: setattr(ws.Cells(row, col), "Formula", formula))
+
+
+def cell_get_value(ws, row, col):
+    return com_call(lambda: ws.Cells(row, col).Value)
 
 
 def safe_symbol_token(symbol):
@@ -180,15 +216,15 @@ def legs_by_ticker(legs):
 
 def setup_sheet(ws, ticker, legs):
     """Lay out one ticker's RTD sheet: underlying block + option ladder."""
-    ws.Cells.Clear()
-    ws.Cells(UNDERLYING_HEADER_ROW, 1).Value = "UNDERLYING_SYMBOL"
-    ws.Cells(UNDERLYING_VALUE_ROW, 1).Value = ticker
+    com_call(lambda: ws.Cells.Clear())
+    cell_set_value(ws, UNDERLYING_HEADER_ROW, 1, "UNDERLYING_SYMBOL")
+    cell_set_value(ws, UNDERLYING_VALUE_ROW, 1, ticker)
     for col, field in enumerate(UNDERLYING_FIELDS, start=2):
-        ws.Cells(UNDERLYING_HEADER_ROW, col).Value = f"UNDERLYING_{field}"
-        ws.Cells(UNDERLYING_VALUE_ROW, col).Formula = f'=RTD("tos.rtd",,"{field}","{ticker}")'
-    ws.Cells(OPTION_HEADER_ROW, 1).Value = "SYMBOL"
+        cell_set_value(ws, UNDERLYING_HEADER_ROW, col, f"UNDERLYING_{field}")
+        cell_set_formula(ws, UNDERLYING_VALUE_ROW, col, f'=RTD("tos.rtd",,"{field}","{ticker}")')
+    cell_set_value(ws, OPTION_HEADER_ROW, 1, "SYMBOL")
     for col, field in enumerate(FIELDS, start=2):
-        ws.Cells(OPTION_HEADER_ROW, col).Value = field
+        cell_set_value(ws, OPTION_HEADER_ROW, col, field)
     apply_symbols(ws, legs, build_formulas=True)
 
 
@@ -268,7 +304,7 @@ def get_or_create_excel(legs_by_tk):
         sheets[ticker.upper()] = ws
     cleanup_sheets(excel, wb)
 
-    wb.Save()
+    com_call(wb.Save)
     return excel, wb, sheets
 
 
@@ -279,12 +315,12 @@ def apply_symbols(ws, legs, build_formulas=False):
         row = OPTION_FIRST_VALUE_ROW + i
         if i < len(legs):
             symbol = legs[i].get("symbol", "")
-            ws.Cells(row, 1).Value = symbol
+            cell_set_value(ws, row, 1, symbol)
             if build_formulas:
                 for col, field in enumerate(FIELDS, start=2):
-                    ws.Cells(row, col).Formula = f'=RTD("tos.rtd",,"{field}",$A${row})'
+                    cell_set_formula(ws, row, col, f'=RTD("tos.rtd",,"{field}",$A${row})')
         else:
-            ws.Range(ws.Cells(row, 1), ws.Cells(row, last_col)).ClearContents()
+            com_call(lambda r=row: ws.Range(ws.Cells(r, 1), ws.Cells(r, last_col)).ClearContents())
 
 
 def build_session_index(symbol, day, legs):
@@ -339,19 +375,19 @@ def read_underlying_row(ws):
     row = {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     for col, field in enumerate(UNDERLYING_FIELDS, start=2):
         name = f"UNDERLYING_{field}"
-        value = normalize.underlying_value(ws.Cells(UNDERLYING_VALUE_ROW, col).Value, name)
+        value = normalize.underlying_value(cell_get_value(ws, UNDERLYING_VALUE_ROW, col), name)
         row[name] = value if value is not None else ""
     return row
 
 
 def read_leg_row(ws, value_row, previous_volume):
     """One option-contract tape row (real-unit BID + greeks/IV) for the leg at value_row."""
-    symbol = clean_value(ws.Cells(value_row, 1).Value)
+    symbol = clean_value(cell_get_value(ws, value_row, 1))
     if not symbol:
         return None, None, previous_volume
     row = {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     for col, field in enumerate(FIELDS, start=2):
-        value = normalize_option_field(field, ws.Cells(value_row, col).Value)
+        value = normalize_option_field(field, cell_get_value(ws, value_row, col))
         row[field] = value if value is not None else ""
     volume = safe_float(row.get("VOLUME"))
     row["VOLUME_1M"] = max(volume - previous_volume, 0) if (previous_volume is not None and volume is not None) else ""
@@ -451,7 +487,7 @@ def main():
 
         except KeyboardInterrupt:
             print("\nMonitorizacion detenida por el usuario.")
-            wb.Save()
+            com_call(wb.Save)
             break
 
         except Exception as e:

@@ -187,6 +187,39 @@ def latest_session_underlying_bid(ticker="MU"):
     return None
 
 
+
+def previous_session_underlying_close(ticker="MU", day=None):
+    """Last valid underlying bid from the available session before `day`."""
+    try:
+        target_day = date.fromisoformat(str(day)) if day else date.today()
+    except (TypeError, ValueError):
+        target_day = date.today()
+    target_text = target_day.isoformat()
+    prev_days = [d for d in store.list_session_days(ticker) if d < target_text]
+    for prev_day in reversed(prev_days):
+        idx = store.read_index(ticker, prev_day) or {}
+        normalized = bool(idx.get("normalized"))
+        path = store.underlying_path(ticker, prev_day)
+        if not path.exists():
+            continue
+        with open(path, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f, skipinitialspace=True))
+        rth_rows = [r for r in rows if use_row_for_plot(r.get("timestamp", ""), prev_day)]
+        for row in reversed(rth_rows or rows):
+            for key in ("UNDERLYING_BID", "UNDERLYING_LAST", "UNDERLYING_MARK"):
+                raw = row.get(key)
+                price = _num(raw) if normalized else parse_live_price(raw, key)
+                if price is not None and price > 0:
+                    return {
+                        "ticker": safe_symbol_token(ticker),
+                        "date": prev_day,
+                        "close": round(price, 4),
+                        "timestamp": row.get("timestamp", ""),
+                        "field": key,
+                        "source": path.name,
+                    }
+    return None
+
 def latest_session_option_quote(symbol):
     if not symbol:
         return None
@@ -727,11 +760,17 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/gamma":
             self.serve_gamma(parse_qs(parsed.query))
             return
+        if parsed.path == "/api/gamma-history":
+            self.serve_gamma_history(parse_qs(parsed.query))
+            return
         if parsed.path == "/api/start":
             self.serve_start(parse_qs(parsed.query))
             return
         if parsed.path == "/api/expirations":
             self.serve_expirations(parse_qs(parsed.query))
+            return
+        if parsed.path == "/api/previous-close":
+            self.serve_previous_close(parse_qs(parsed.query))
             return
         if parsed.path == "/api/chart-config":
             self._send_json(current_chart_config())
@@ -1202,6 +1241,46 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
             "strikes": strikes,
         })
 
+    def serve_gamma_history(self, query):
+        """Time series of the session-level gamma levels for a day.
+
+        One point per snapshot (the level fields repeat across each snapshot's
+        strike rows, so we keep the first row per distinct timestamp). Feeds the
+        Long/Short gamma-wall migration lines on the chart.
+        """
+        ticker = (query.get("ticker") or ["MU"])[0].upper()
+        day = (query.get("date") or [None])[0] or date.today().isoformat()
+        path = GAMMA_DIR / f"{safe_symbol_token(ticker)}_GAMM_by_strikes_{day}.csv"
+        if not path.exists():
+            self._send_json({"ticker": ticker, "date": day, "points": [], "error": f"Sin gamma para {ticker} {day}."})
+            return
+        with open(path, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+
+        def num(v):
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return None
+
+        points = []
+        seen = set()
+        for r in rows:
+            ts = r.get("timestamp", "")
+            if not ts or ts in seen:
+                continue
+            seen.add(ts)
+            points.append({
+                "t": ts,
+                "spot": num(r.get("spot")),
+                "major_positive": num(r.get("major_positive")),
+                "major_negative": num(r.get("major_negative")),
+                "major_long_gamma": num(r.get("major_long_gamma")),
+                "major_short_gamma": num(r.get("major_short_gamma")),
+                "gamma_flip": num(r.get("gamma_flip")),
+            })
+        self._send_json({"ticker": ticker, "date": day, "points": points})
+
     def serve_strikes(self, query):
         """List the strikes present in a session day's live CSV."""
         ticker = (query.get("ticker") or ["MU"])[0]
@@ -1246,6 +1325,15 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
             "underlying": round(underlying, 2) if underlying else None,
             "atm": atm,
         })
+
+    def serve_previous_close(self, query):
+        ticker = (query.get("ticker") or ["MU"])[0]
+        day = (query.get("date") or [None])[0]
+        payload = previous_session_underlying_close(ticker, day)
+        if payload is None:
+            self._send_json({"ticker": safe_symbol_token(ticker), "date": day or "", "close": None})
+            return
+        self._send_json(payload)
 
     def _send_json(self, obj):
         body = json.dumps(obj).encode("utf-8")
