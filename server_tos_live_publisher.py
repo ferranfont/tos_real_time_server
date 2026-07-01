@@ -20,6 +20,7 @@ from utils.black_scholes import bs_price, bs_greeks, DEFAULT_RATE
 PROJECT_ROOT = Path(__file__).resolve().parent
 DATA_DIR = PROJECT_ROOT / "data"
 LIVE_DATA_DIR = DATA_DIR / "live"
+GAMMA_DIR = DATA_DIR / "gamma"
 CSV_FILE_NAME = "registro_opcion_minuto_a_minuto.csv"
 LEGACY_TOS_CSV = DATA_DIR / CSV_FILE_NAME
 ACTIVE_SYMBOLS_FILE = PROJECT_ROOT / "RTD_live_excel" / "active_symbols.json"
@@ -723,6 +724,9 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/live-expirations":
             self.serve_session_expirations(parse_qs(parsed.query))
             return
+        if parsed.path == "/api/gamma":
+            self.serve_gamma(parse_qs(parsed.query))
+            return
         if parsed.path == "/api/start":
             self.serve_start(parse_qs(parsed.query))
             return
@@ -1151,6 +1155,52 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
         day = (query.get("date") or [None])[0] or store.latest_session_day(ticker)
         exps = session_expirations(ticker, day) if day else []
         self._send_json({"date": day or "", "expirations": exps})
+
+    def serve_gamma(self, query):
+        """Gamma-by-strike from data/gamma/<TICKER>_GAMM_by_strikes_<date>.csv.
+
+        Returns the latest snapshot: {timestamp, spot, walls, strikes:[{strike, gamma}]}.
+        gamma keeps its sign (positive/negative) per strike.
+        """
+        ticker = (query.get("ticker") or ["MU"])[0].upper()
+        day = (query.get("date") or [None])[0] or date.today().isoformat()
+        path = GAMMA_DIR / f"{safe_symbol_token(ticker)}_GAMM_by_strikes_{day}.csv"
+        if not path.exists():
+            self._send_json({"ticker": ticker, "date": day, "strikes": [], "error": f"Sin gamma para {ticker} {day}."})
+            return
+        with open(path, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+        if not rows:
+            self._send_json({"ticker": ticker, "date": day, "strikes": []})
+            return
+
+        def num(v):
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return None
+
+        last_ts = rows[-1].get("timestamp", "")
+        latest = [r for r in rows if r.get("timestamp") == last_ts]
+        strikes = [
+            {
+                "strike": num(r.get("strike")), "gamma": num(r.get("gamma")),
+                "g5": num(r.get("gamma_5m")), "g15": num(r.get("gamma_15m")), "g30": num(r.get("gamma_30m")),
+            }
+            for r in latest
+            if num(r.get("strike")) is not None and num(r.get("gamma")) is not None
+        ]
+        meta = latest[0] if latest else {}
+        self._send_json({
+            "ticker": ticker, "date": day, "timestamp": last_ts,
+            "spot": num(meta.get("spot")),
+            "major_positive": num(meta.get("major_positive")),
+            "major_negative": num(meta.get("major_negative")),
+            "major_long_gamma": num(meta.get("major_long_gamma")),
+            "major_short_gamma": num(meta.get("major_short_gamma")),
+            "gamma_flip": num(meta.get("gamma_flip")),
+            "strikes": strikes,
+        })
 
     def serve_strikes(self, query):
         """List the strikes present in a session day's live CSV."""

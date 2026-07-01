@@ -81,6 +81,7 @@
       border: 1px solid rgba(34,211,238,.42);
       background: rgba(5,8,13,.82);
     }
+    #chainToggle { min-width: 62px; padding-left: 18px; padding-right: 18px; }
     .pill:hover, .file-btn:hover,
     .pill.active, .file-btn.active,
     .pill.active:hover, .file-btn.active:hover {
@@ -141,6 +142,14 @@
     .strike-title-logo { width: 22px; height: 22px; border-radius: 5px; object-fit: contain; background: rgba(255,255,255,.92); padding: 1px; flex: 0 0 auto; }
     .strike-title-logo[hidden] { display: none; }
     .strike-title { color: #22d3ee; font-size: 16px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; line-height: 1; }
+    .clear-options-btn {
+      margin-left: auto; height: 24px; min-width: 66px; padding: 0 10px;
+      border: 1px solid rgba(34,211,238,.5); border-radius: 7px;
+      background: rgba(5,8,13,.72); color: #e0f7ff;
+      font: inherit; font-size: 11px; font-weight: 800; letter-spacing: .03em;
+      cursor: pointer;
+    }
+    .clear-options-btn:hover { border-color: var(--red); background: rgba(255,59,79,.14); color: #fff; }
     /* Two controls share one row: expiration (select) + session day (calendar). */
     .strike-ctl {
       flex: 1 1 0; min-width: 0; appearance: auto; text-align: left;
@@ -252,6 +261,41 @@
     .pnl-ls-l { color: var(--green); font-weight: 600; }
     .pnl-pos { color: var(--green); }
     .pnl-neg { color: var(--red); }
+    /* Gamma walls + delta box (floating, left side). */
+    .walls-box {
+      position: fixed; left: auto; right: 400px; top: 88px; z-index: 24;
+      width: 250px; max-height: calc(100vh - 150px); overflow: auto;
+      border: 1px solid rgba(168,85,247,0.35);
+      background: rgba(15, 8, 32, 0.60);
+      border-radius: 12px; padding: 12px 14px; color: #cbd5e1;
+      box-shadow: 0 20px 45px rgba(0,0,0,0.4); backdrop-filter: blur(12px);
+      font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums;
+      scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.16) transparent;
+    }
+    .walls-head { cursor: move; }
+    .walls-flip { color: #ffd400; }
+    .walls-box[hidden] { display: none; }
+    .strat-mode .walls-box { display: none; }
+    .walls-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+    .walls-title { color: #e5e7eb; font-size: 13px; font-weight: 500; }
+    .walls-drag-hint { margin-left: 8px; color: #d8b4fe; font-size: 19px; font-weight: 900; letter-spacing: -3px; vertical-align: -3px; cursor: move; text-shadow: 0 0 10px rgba(168,85,247,.45); }
+    .walls-meta { color: #94a3b8; font-size: 11px; }
+    .walls-symbol { color: var(--cyan); font-size: 14px; font-weight: 700; }
+    .walls-time { margin-left: 6px; }
+    .walls-levels { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+    .walls-lvl { display: flex; align-items: center; justify-content: space-between; }
+    .walls-lvl .k { color: #94a3b8; font-size: 10px; font-weight: 400; text-transform: uppercase; letter-spacing: .03em; }
+    .walls-lvl .v { font-weight: 500; }
+    .walls-pos { color: #2dd4bf; }
+    .walls-neg { color: #a855f7; }
+    .walls-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .walls-table th { color: #94a3b8; font-size: 9px; font-weight: 500; text-transform: uppercase; text-align: right; padding: 2px 0 4px; border-bottom: 1px solid rgba(148,163,184,.22); }
+    .walls-table th:first-child { text-align: left; }
+    .walls-table th:nth-child(n+2) { text-transform: none; }
+    .walls-table td { text-align: right; padding: 2px 0; color: #cbd5e1; font-weight: 400; }
+    .walls-table td:first-child { text-align: left; color: #e5e7eb; font-weight: 400; }
+    .walls-table tr.atm td:first-child { color: #ffd400; }
+    .walls-table td.wd-up { color: var(--green); } .walls-table td.wd-dn { color: var(--red); }
     .chain-visible .side-panel { display: none; }
     .option-chain-panel {
       position: fixed;
@@ -554,8 +598,8 @@
     .strat-mode .ul-toggle { display: none; }
     .mode-pills { display: none; }
     .right-tools select { display: none; }
-    .pct-toggle { top: 78px; right: 330px; bottom: auto; width: 36px; min-width: 36px; padding: 0; }
-    #toggleUnderlying { top: 105px; right: 42px; bottom: auto; width: 112px; min-width: 112px; padding: 0 10px; }
+    .pct-toggle { top: 68px; right: 330px; bottom: auto; width: 36px; min-width: 36px; padding: 0; }
+    #toggleUnderlying { top: 105px; right: 42px; bottom: auto; width: 82px; min-width: 82px; padding: 0 5px; }
     .ul-toggle.on { border-color: var(--green); background: rgba(0,230,118,.18); color: #fff; }
     .session-toggle { left: 6px; right: auto; top: auto; bottom: 8px; width: 56px; min-width: 56px; height: 24px; padding: 0; }
     .status {
@@ -608,6 +652,8 @@
       <select id="symbolSelect" aria-label="Simbolo"><option>MU</option></select>
       <button id="startBtn" class="file-btn top-start" type="button" title="Reset + escalera ATM 12 por lado de la expiracion mas cercana">START</button>
       <span id="startStatus" class="top-start-status"></span>
+      <button id="gammaToggle" class="file-btn" type="button" title="Perfil de gamma por strike">Gamma</button>
+      <button id="wallsToggle" class="file-btn" type="button" title="Muros de gamma + variacion 5/15/30m">Walls</button>
       <button id="chainToggle" class="file-btn" type="button">Strat</button>
       <input id="csvInput" type="file" accept=".csv,text/csv">
     </div>
@@ -620,7 +666,7 @@
 
   <aside class="strike-card" id="strikeCard">
     <div class="strike-head">
-      <span class="strike-brand"><img id="strikeTitleLogo" class="strike-title-logo" alt="" hidden><span class="strike-title" id="strikeTitle">NDX</span></span>
+      <span class="strike-brand"><img id="strikeTitleLogo" class="strike-title-logo" alt="" hidden><span class="strike-title" id="strikeTitle">NDX</span><button id="clearOptionsBtn" class="clear-options-btn" type="button" title="Borrar puts/calls seleccionadas">Reset</button></span>
       <select id="strikeExp" class="strike-ctl" aria-label="Vencimiento" title="Vencimiento (expiracion)"></select>
       <input type="date" id="strikeDay" class="strike-ctl" aria-label="Sesion" title="Dia de sesion">
     </div>
@@ -640,6 +686,15 @@
       <span id="anchorStatus" class="anchor-status"></span>
       <div id="anchorPnl" class="anchor-pnl"></div>
   </div>
+
+  <aside id="wallsBox" class="walls-box" hidden>
+    <div class="walls-head"><span><span class="walls-title">Gamma Walls</span><span class="walls-drag-hint" title="Arrastrar">&vellip;&vellip;</span></span><span id="wallsMeta" class="walls-meta"></span></div>
+    <div id="wallsWalls" class="walls-levels"></div>
+    <table class="walls-table">
+      <thead><tr><th>Strike</th><th>Gamma</th><th>5m</th><th>15m</th><th>30m</th></tr></thead>
+      <tbody id="wallsRows"></tbody>
+    </table>
+  </aside>
 
   <button id="togglePct" class="ul-toggle pct-toggle" type="button" hidden>%</button>
   <button id="toggleUnderlying" class="ul-toggle" type="button" hidden>Hide Spot</button>
@@ -727,7 +782,7 @@
       } catch (_) {}
       return null;
     }
-    const state = { rows: [], symbol: initialSymbol(), file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null, payoffLoading: false, lastPayoffRefreshKey: null, premium: null, premiumPast: false, premiumDay: null, selected: [], series: {}, anchorEntry: null, anchorActive: false, latestDay: null, hideUnderlying: false, premiumPct: false, expirations: null, tickers: [], rangeMode: initialRangeMode(), chartConfig: { use_rth_only: true, rth_start_bcn: "15:30", rth_end_bcn: "22:50", rth_timezone: "BCN" }, chartRangeKey: "" };
+    const state = { rows: [], symbol: initialSymbol(), file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null, payoffLoading: false, lastPayoffRefreshKey: null, premium: null, premiumPast: false, premiumDay: null, selected: [], series: {}, anchorEntry: null, anchorActive: false, showGamma: false, showWalls: false, gamma: null, latestDay: null, hideUnderlying: false, premiumPct: false, expirations: null, tickers: [], rangeMode: initialRangeMode(), chartConfig: { use_rth_only: true, rth_start_bcn: "15:30", rth_end_bcn: "22:50", rth_timezone: "BCN" }, chartRangeKey: "" };
     const $ = id => document.getElementById(id);
 
     function parseCsv(text) {
@@ -763,6 +818,11 @@
       if (!Number.isFinite(n)) return "--";
       const sign = n < 0 ? "-" : "";
       return sign + String(Math.abs(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    }
+    function fmtStrike0(v) {
+      if (v == null) return "--";
+      const n = Math.round(Number(v));
+      return Number.isFinite(n) ? String(n) : "--";
     }
     function fmtMoney0(v) { return v == null ? "--" : `$ ${fmtGroup0(v)}`; }
     function fmtBE0(v) { return fmtGroup0(v); }
@@ -813,6 +873,10 @@
     function fmt0(v) { return v == null ? "--" : nf0.format(v); }
     function esc(s) { return String(s || "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
     function shortTime(ts) { return String(ts || "--").replace(/^\d{4}-\d{2}-\d{2}\s+/, ""); }
+    function hourOnly(ts) {
+      const m = String(ts || "").match(/(?:^|\s)(\d{2}):/);
+      return m ? `${m[1]}:00` : "--:00";
+    }
     function readActiveStrategy() {
       try {
         const raw = localStorage.getItem(ACTIVE_STRATEGY_KEY);
@@ -1766,7 +1830,7 @@
       state.premium = null; state.expirations = null; state.expirationsError = null; state.nearAtm = null;
       state.selectedStrike = null; state.selectedPutStrike = null; state.selectedCallStrike = null;
       state.payoff = null; state.rows = []; state.userRange = null; state.premiumDay = null;
-      state.selected = []; state.series = {};
+      state.selected = []; state.series = {}; state.gamma = null;
       state.defaultStrategyApplied = false; state.sendCtx = null; state.lastPayoffRefreshKey = null;
       updateSymbols();
       if (!state.stratMode) restoreChartStateBasics();
@@ -1829,6 +1893,7 @@
       }
       drawChart(rows, last.spot);
       renderAnchorPnl();
+      renderWallsBox();
     }
 
 
@@ -2145,7 +2210,10 @@
       const strikeLevels = selectedStrikeLevels();
       const strikeOverlays = selectedStrikeOverlays(strikeLevels);
       // Left axis scales to the PRICE/spot and selected strike reference lines, not premiums.
-      const yScaleVals = [...y, ...strikeLevels];
+      const wallLevels = (state.showWalls && state.gamma)
+        ? [state.gamma.major_long_gamma, state.gamma.major_short_gamma, state.gamma.gamma_flip].filter(Number.isFinite)
+        : [];
+      const yScaleVals = [...y, ...strikeLevels, ...wallLevels];
       const ymin = Math.min(...yScaleVals), ymax = Math.max(...yScaleVals), span = Math.max(ymax - ymin, 0.01);
       const yLo = ymin - span * 0.18, yHi = ymax + span * 0.22;
       // Optional toggle: show premiums as % change from the session's first value.
@@ -2231,7 +2299,8 @@
         }
       }
       const hasPremium = premiumTraces.length > 0;
-      const xRange = withRightPad(selectedSessionRange() || paddedTimeRange([...x, ...premiumX]));
+      const sessionRange = selectedSessionRange();
+      const xRange = sessionRange ? withRightPad(sessionRange, 0.12) : paddedTimeRange([...x, ...premiumX]);
       const chartFrameShape = {
         type: "rect", xref: "paper", yref: "paper", x0: 0, x1: 1, y0: 0, y1: 1,
         line: { color: "rgba(148, 163, 184, 0.42)", width: 1 },
@@ -2281,6 +2350,38 @@
           });
         }
       }
+      // Gamma-by-strike profile: horizontal bars diverging from a center vline, length
+      // proportional to |gamma| (no scale). Cyan = gamma positiva, violeta = negativa.
+      const gammaShapes = [];
+      if (state.showGamma && state.gamma && Array.isArray(state.gamma.strikes)) {
+        const gs = state.gamma.strikes.filter(s => Number.isFinite(s.strike) && Number.isFinite(s.gamma) && s.gamma !== 0);
+        const maxAbs = gs.reduce((m, s) => Math.max(m, Math.abs(s.gamma)), 0) || 1;
+        const CENTER = 0.5, MAXLEN = 0.4;
+        gammaShapes.push({ type: "line", xref: "paper", yref: "paper", x0: CENTER, x1: CENTER, y0: 0, y1: 1,
+          line: { color: "rgba(255,255,255,0.30)", width: 1, dash: "dot" }, layer: "below" });
+        for (const s of gs) {
+          const len = (Math.abs(s.gamma) / maxAbs) * MAXLEN;
+          gammaShapes.push({ type: "line", xref: "paper", yref: "y",
+            x0: CENTER, x1: CENTER + (s.gamma > 0 ? len : -len), y0: s.strike, y1: s.strike,
+            line: { color: s.gamma > 0 ? "#2dd4bf" : "#a855f7", width: 3 }, layer: "below" });
+        }
+      }
+      // Gamma walls: horizontal reference lines at major_positive (G+) / major_negative (G-).
+      const wallShapes = [], wallAnnos = [];
+      if (state.showWalls && state.gamma) {
+        for (const w of [
+          { v: state.gamma.major_long_gamma, color: "#2dd4bf", label: "Long Gamma" },
+          { v: state.gamma.major_short_gamma, color: "#a855f7", label: "Short Gamma" },
+          { v: state.gamma.gamma_flip, color: "#ffd400", label: "Flip" },
+        ]) {
+          if (!Number.isFinite(w.v)) continue;
+          wallShapes.push({ type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: w.v, y1: w.v,
+            line: { color: w.color, width: 1.5, dash: "dash" }, layer: "above" });
+          wallAnnos.push({ xref: "paper", yref: "y", x: 0, y: w.v, xanchor: "left", yanchor: "middle",
+            text: `${w.label} ${fmtStrike0(w.v)}`, showarrow: false, font: { color: w.color, size: 10, weight: 700 },
+            bgcolor: "rgba(11,14,20,0.85)", bordercolor: w.color, borderwidth: 1, borderpad: 2 });
+        }
+      }
       const layout = {
         uirevision: `${state.symbol}-${state.chartRangeKey}-manual-zoom`,
         paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", separators: ",.",
@@ -2294,11 +2395,14 @@
         shapes: [
           chartFrameShape,
           { type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: lastSpot, y1: lastSpot, line: { color: "#22d3ee", width: 1 }, layer: "above" },
+          ...gammaShapes,
+          ...wallShapes,
           ...strikeOverlays.shapes,
           ...anchorOverlay.shapes
         ],
         annotations: [
           { xref: "paper", yref: "y", x: 1, y: lastSpot, xanchor: "right", yanchor: "middle", text: `Bid ${fmt2(lastSpot)}`, showarrow: false, font: { color: "#22d3ee", size: 11, weight: 700 }, bgcolor: "rgba(11,14,20,0.85)", bordercolor: "#22d3ee", borderwidth: 1, borderpad: 3 },
+          ...wallAnnos,
           ...strikeOverlays.annotations,
           ...anchorOverlay.annotations
         ]
@@ -2311,13 +2415,13 @@
       }
       // Legend identifies each selected contract line when one or more is plotted.
       layout.showlegend = hasPremium;
-      layout.legend = { orientation: "h", x: 0.5, y: 0.04, xanchor: "center", yanchor: "bottom",
+      layout.legend = { orientation: "h", x: 0.5, y: 0.03, xanchor: "center", yanchor: "bottom",
         font: { color: "#cbd5e1", size: 10 }, bgcolor: "rgba(0,0,0,0)", borderwidth: 0 };
       // Toggle: hide the underlying line, but keep the chart frame/axes visible.
       const chartTraces = state.hideUnderlying ? [...premiumTraces] : [trace, ...premiumTraces];
       if (state.hideUnderlying) {
-        layout.shapes = [chartFrameShape, ...strikeOverlays.shapes, ...anchorOverlay.shapes];
-        layout.annotations = [...strikeOverlays.annotations, ...anchorOverlay.annotations];
+        layout.shapes = [chartFrameShape, ...gammaShapes, ...wallShapes, ...strikeOverlays.shapes, ...anchorOverlay.shapes];
+        layout.annotations = [...wallAnnos, ...strikeOverlays.annotations, ...anchorOverlay.annotations];
         layout.yaxis.showgrid = false;
         if (layout.yaxis2) {
           layout.yaxis2.showgrid = true;
@@ -2399,16 +2503,119 @@
         } catch (_) {}
       }));
     }
+    // Gamma-by-strike snapshot (from the friend's server, stored in data/gamma/ CSV).
+    async function loadGamma() {
+      try {
+        const url = new URL("/api/gamma", location.origin);
+        url.searchParams.set("ticker", state.symbol);
+        if (currentDay()) url.searchParams.set("date", currentDay());
+        url.searchParams.set("ts", Date.now());
+        const data = await (await fetch(url, { cache: "no-store" })).json();
+        state.gamma = (data && Array.isArray(data.strikes) && data.strikes.length) ? data : null;
+      } catch (_) { state.gamma = null; }
+    }
     async function refreshFile() {
       try {
         if (state.httpMode) await loadHttpCsv();
         else if (state.file) await loadFile(state.file);
         if (state.selected.length) { await refreshSelectedSeries(); if (!state.stratMode && state.rows.length) render(); }
+        if (state.showGamma || state.showWalls) { await loadGamma(); if (!state.stratMode && state.rows.length) render(); }
       } catch (err) {
         $("status").className = "status err";
         $("status").textContent = "error CSV";
       }
     }
+    $("gammaToggle").addEventListener("click", async () => {
+      state.showGamma = !state.showGamma;
+      $("gammaToggle").classList.toggle("active", state.showGamma);
+      if (state.showGamma) await loadGamma(); else if (!state.showWalls) state.gamma = null;
+      render();
+    });
+    // Walls: gamma walls (major +/-) as reference lines + a floating box with the
+    // per-strike gamma variation vs 5/15/30 min.
+    $("wallsToggle").addEventListener("click", async () => {
+      state.showWalls = !state.showWalls;
+      $("wallsToggle").classList.toggle("active", state.showWalls);
+      $("wallsBox").hidden = !state.showWalls;
+      if (state.showWalls) await loadGamma(); else if (!state.showGamma) state.gamma = null;
+      render();
+    });
+    function renderWallsBox() {
+      const box = $("wallsBox");
+      if (!box || box.hidden) return;
+      const g = state.gamma;
+      if (!g || !Array.isArray(g.strikes) || !g.strikes.length) {
+        $("wallsMeta").textContent = "sin gamma";
+        $("wallsWalls").innerHTML = "";
+        $("wallsRows").innerHTML = `<tr><td colspan="5" style="color:#94a3b8">Sin datos de gamma para ${esc(state.symbol)} ${esc(currentDay())}.</td></tr>`;
+        return;
+      }
+      $("wallsMeta").innerHTML = `<span class="walls-symbol">${esc(state.symbol)}</span><span class="walls-time">${hourOnly(g.timestamp || "")}</span>`;
+      const lvl = (k, v, cls) => (Number.isFinite(v)
+        ? `<div class="walls-lvl"><span class="k">${k}</span><span class="v ${cls}">${fmtStrike0(v)}</span></div>` : "");
+      $("wallsWalls").innerHTML =
+        lvl("Long Gamma", g.major_long_gamma, "walls-pos") +
+        lvl("Short Gamma", g.major_short_gamma, "walls-neg") +
+        lvl("Flip", g.gamma_flip, "walls-flip");
+      // Symmetric band around the ATM: N strikes above + ATM + N below (ATM centered).
+      const spot = Number(g.spot);
+      const all = g.strikes
+        .filter(s => Number.isFinite(s.strike) && Number.isFinite(s.gamma))
+        .sort((a, b) => a.strike - b.strike);
+      const atmIdx = all.length ? all.reduce((best, s, i) => Math.abs(s.strike - spot) < Math.abs(all[best].strike - spot) ? i : best, 0) : 0;
+      const N = 10;  // strikes each side of the ATM
+      const near = all.slice(Math.max(0, atmIdx - N), atmIdx + N + 1).sort((a, b) => b.strike - a.strike);
+      const atmStrike = all.length ? all[atmIdx].strike : spot;
+      // Per-column delta; highlight the outliers (|delta| beyond 1 std of the column):
+      // green if the gamma rose, red if it fell.
+      const cols = ["g5", "g15", "g30"];
+      near.forEach(s => {
+        s._d = {};
+        for (const c of cols) s._d[c] = Number.isFinite(s.gamma) && Number.isFinite(s[c]) ? s.gamma - s[c] : null;
+      });
+      const stdOf = arr => {
+        const v = arr.filter(Number.isFinite);
+        if (v.length < 2) return 0;
+        const m = v.reduce((a, b) => a + b, 0) / v.length;
+        return Math.sqrt(v.reduce((a, b) => a + (b - m) ** 2, 0) / v.length);
+      };
+      const K = 1.0;  // sigma multiplier: solo se colorean los valores > 1 sigma (menos color, mas selectivo)
+      const stdGamma = stdOf(near.map(s => s.gamma));
+      const std = {};
+      for (const c of cols) std[c] = stdOf(near.map(s => s._d[c]));
+      // Verde/rojo a los valores cuya magnitud supera K*sigma de su columna
+      // (Γ: grande verde / muy negativo rojo; deltas: sube verde / baja rojo).
+      const colorCls = (v, sd) => (Number.isFinite(v) && sd > 1e-9 && Math.abs(v) > K * sd) ? (v > 0 ? "wd-up" : "wd-dn") : "";
+      const dcell = (s, c) => {
+        const d = s._d[c];
+        if (!Number.isFinite(d)) return `<td>–</td>`;
+        return `<td class="${colorCls(d, std[c])}">${d >= 0 ? "+" : "−"}${fmt2(Math.abs(d))}</td>`;
+      };
+      $("wallsRows").innerHTML = near.map(s =>
+        `<tr class="${s.strike === atmStrike ? "atm" : ""}"><td>${fmtStrike0(s.strike)}</td>` +
+        `<td class="${colorCls(s.gamma, stdGamma)}">${fmt2(s.gamma)}</td>` +
+        `${dcell(s, "g5")}${dcell(s, "g15")}${dcell(s, "g30")}</tr>`
+      ).join("");
+    }
+    // Drag the walls box by its header to move it out of the way.
+    function initWallsDrag() {
+      const box = $("wallsBox"), head = box && box.querySelector(".walls-head");
+      if (!box || !head) return;
+      let on = false, sx = 0, sy = 0, x0 = 0, y0 = 0;
+      head.addEventListener("mousedown", ev => {
+        const r = box.getBoundingClientRect();
+        box.style.right = "auto"; box.style.left = r.left + "px"; box.style.top = r.top + "px";
+        on = true; x0 = r.left; y0 = r.top; sx = ev.clientX; sy = ev.clientY;
+        document.body.style.userSelect = "none"; ev.preventDefault();
+      });
+      document.addEventListener("mousemove", ev => {
+        if (!on) return;
+        box.style.left = Math.max(0, x0 + ev.clientX - sx) + "px";
+        box.style.top = Math.max(0, y0 + ev.clientY - sy) + "px";
+      });
+      document.addEventListener("mouseup", () => { on = false; document.body.style.userSelect = ""; });
+    }
+    initWallsDrag();
     $("chainToggle").addEventListener("click", openStratTab);
     document.addEventListener("click", ev => {
       if (ev.target.closest("#startBtn")) { startLadder(); return; }
@@ -2491,9 +2698,29 @@
         opt.classList.toggle("on", on);
       });
     }
+    function clearOptionSelections() {
+      state.selected = [];
+      state.series = {};
+      state.userRange = null;
+      state.anchorEntry = null;
+      state.anchorActive = false;
+      document.querySelectorAll("#strikeRows .strike-opt").forEach(opt => {
+        opt.classList.remove("on", "is-long");
+        opt.classList.add("is-short");
+        const ls = opt.querySelector(".strike-ls");
+        if (ls) ls.textContent = "S";
+      });
+      setAnchorDropdownValue("anchorHourDD", "anchorHour", "");
+      setAnchorDropdownValue("anchorMinDD", "anchorMin", "");
+      refreshAnchorStatus();
+      renderAnchorPnl();
+      saveChartState();
+      if (!state.stratMode && state.rows.length) render();
+    }
     // Click a box: toggle that contract (put/call of its strike) in the multi-selection;
     // its premium line is added/removed on the chart. Click the L/S letter to switch
     // Long/Short; this flips the leg's sign in the Spread (S=+credit, L=-debit).
+    $("clearOptionsBtn").addEventListener("click", clearOptionSelections);
     $("strikeRows").addEventListener("click", ev => {
       const opt = ev.target.closest(".strike-opt");
       if (!opt) return;

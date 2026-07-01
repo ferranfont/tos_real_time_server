@@ -18,8 +18,10 @@ PORT = 8898
 
 COLLECTOR_SCRIPT = PROJECT_ROOT / "tos_realtime_server.py"
 DASHBOARD_SCRIPT = PROJECT_ROOT / "server_tos_live_publisher.py"
+GAMMA_SCRIPT = PROJECT_ROOT / "gexbot" / "gamma_collector.py"
 COLLECTOR_PID_FILE = LOG_DIR / "tos_realtime_server.pid"
 DASHBOARD_PID_FILE = LOG_DIR / "server_tos_live_publisher.pid"
+GAMMA_PID_FILE = LOG_DIR / "gamma_collector.pid"
 SPOT_URL = f"http://{HOST}:{PORT}/outputs/tos_live_underlying.html"
 STRAT_URL = f"{SPOT_URL}?strat=1"
 
@@ -117,18 +119,26 @@ def open_dashboards() -> None:
     webbrowser.open(STRAT_URL)
 
 
+def _pid_file_for(name: str):
+    return {
+        "server_tos_live_publisher.py": DASHBOARD_PID_FILE,
+        "tos_realtime_server.py": COLLECTOR_PID_FILE,
+        "gamma_collector.py": GAMMA_PID_FILE,
+    }.get(name)
+
+
 def cleanup_pid_files(started: list[tuple[str, subprocess.Popen]]) -> None:
     for name, proc in started:
-        if name == "server_tos_live_publisher.py":
-            remove_pid_file(DASHBOARD_PID_FILE, proc.pid)
-        elif name == "tos_realtime_server.py":
-            remove_pid_file(COLLECTOR_PID_FILE, proc.pid)
+        pf = _pid_file_for(name)
+        if pf:
+            remove_pid_file(pf, proc.pid)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Launch TOS RTD collector and live dashboards.")
     parser.add_argument("--no-collector", action="store_true", help="Do not start tos_realtime_server.py")
     parser.add_argument("--no-dashboard-server", action="store_true", help="Do not start server_tos_live_publisher.py")
+    parser.add_argument("--no-gamma", action="store_true", help="Do not start gexbot/gamma_collector.py")
     parser.add_argument("--no-browser", action="store_true", help="Do not open browser tabs")
     args = parser.parse_args()
 
@@ -166,6 +176,17 @@ def main() -> int:
             started.append(("tos_realtime_server.py", proc))
             print(f"Colector RTD: arrancado PID {proc.pid} (logs/tos_realtime_server.log)")
 
+    if args.no_gamma:
+        print("Colector Gamma: omitido por --no-gamma")
+    else:
+        existing_pid = pid_from_file(GAMMA_PID_FILE, GAMMA_SCRIPT.name)
+        if existing_pid:
+            print(f"Colector Gamma: PID file activo {existing_pid}; no arranco otro.")
+        else:
+            proc = start_script(GAMMA_SCRIPT, "gamma_collector.log", GAMMA_PID_FILE)
+            started.append(("gamma_collector.py", proc))
+            print(f"Colector Gamma: arrancado PID {proc.pid} (logs/gamma_collector.log)")
+
     if not args.no_browser and port_open(HOST, PORT):
         open_dashboards()
         print("Navegador: abiertas pestanas Spot y STRAT")
@@ -188,10 +209,9 @@ def main() -> int:
         while True:
             for name, proc in started:
                 if proc.poll() is not None and proc.pid not in cleaned:
-                    if name == "server_tos_live_publisher.py":
-                        remove_pid_file(DASHBOARD_PID_FILE, proc.pid)
-                    elif name == "tos_realtime_server.py":
-                        remove_pid_file(COLLECTOR_PID_FILE, proc.pid)
+                    pf = _pid_file_for(name)
+                    if pf:
+                        remove_pid_file(pf, proc.pid)
                     cleaned.add(proc.pid)
             alive = [(name, proc) for name, proc in started if proc.poll() is None]
             if not alive:
