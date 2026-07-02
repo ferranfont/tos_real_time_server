@@ -22,8 +22,7 @@ GAMMA_SCRIPT = PROJECT_ROOT / "gexbot" / "gamma_collector.py"
 COLLECTOR_PID_FILE = LOG_DIR / "tos_realtime_server.pid"
 DASHBOARD_PID_FILE = LOG_DIR / "server_tos_live_publisher.pid"
 GAMMA_PID_FILE = LOG_DIR / "gamma_collector.pid"
-SPOT_URL = f"http://{HOST}:{PORT}/outputs/tos_live_underlying.html"
-STRAT_URL = f"{SPOT_URL}?strat=1"
+SPOT_URL = f"http://{HOST}:{PORT}/outputs/tos_live_underlying.html?symbol=MU"
 
 
 def port_open(host: str, port: int, timeout: float = 0.35) -> bool:
@@ -115,8 +114,6 @@ def start_script(script: Path, log_name: str, pid_file: Path) -> subprocess.Pope
 
 def open_dashboards() -> None:
     webbrowser.open(SPOT_URL)
-    time.sleep(0.4)
-    webbrowser.open(STRAT_URL)
 
 
 def _pid_file_for(name: str):
@@ -147,7 +144,6 @@ def main() -> int:
     print("TOS realtime launcher")
     print(f"Proyecto: {PROJECT_ROOT}")
     print(f"Spot:     {SPOT_URL}")
-    print(f"STRAT:    {STRAT_URL}")
     print("")
 
     if args.no_dashboard_server:
@@ -189,7 +185,7 @@ def main() -> int:
 
     if not args.no_browser and port_open(HOST, PORT):
         open_dashboards()
-        print("Navegador: abiertas pestanas Spot y STRAT")
+        print("Navegador: abierta pestana Spot MU")
     elif args.no_browser:
         print("Navegador: omitido por --no-browser")
     else:
