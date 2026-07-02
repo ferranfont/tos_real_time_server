@@ -6,6 +6,7 @@
   <title>TOS Live Spot</title>
   <link rel="icon" href="/outputs/tos_live_favicon.png" type="image/png">
   <script src="https://cdn.plot.ly/plotly-3.3.1.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     :root {
       color-scheme: dark;
@@ -94,7 +95,7 @@
     .pill:hover, .file-btn:hover { color: #fff; }
     .pill.active, .file-btn.active,
     .pill.active:hover, .file-btn.active:hover { color: var(--active-text); }
-    .greek-controls { position: absolute; top: 31px; right: 300px; z-index: 30; display: inline-flex; align-items: center; gap: 5px; }
+    .greek-controls { position: absolute; top: 37px; right: 375px; z-index: 30; display: inline-flex; align-items: center; gap: 5px; }
     .greek-subs { display: inline-flex; gap: 5px;
       padding: 3px 5px; background: rgba(5,8,13,.55); border: 1px solid rgba(148,163,184,.18); border-radius: 8px; }
     .greek-subs[hidden] { display: none; }
@@ -138,6 +139,10 @@
       text-shadow: 0 0 20px rgba(34,211,238,.18);
     }
     .spot-meta { margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 11px; font-weight: 700; }
+    .health-dot { display: inline-block; width: 5px; height: 5px; margin-left: 5px; border-radius: 999px; vertical-align: 1px; background: #64748b; box-shadow: 0 0 0 1px rgba(148,163,184,.24); }
+    .health-dot.green { background: var(--green); box-shadow: 0 0 6px rgba(0,255,136,.72); }
+    .health-dot.orange { background: #f59e0b; box-shadow: 0 0 6px rgba(245,158,11,.72); }
+    .health-dot.red { background: var(--red); box-shadow: 0 0 6px rgba(255,59,92,.72); }
     .chg.pos { color: var(--green); } .chg.neg { color: var(--red); }
     /* Strike table card: docked under the spot card, all light grey. */
     .strike-card {
@@ -497,6 +502,67 @@
       color: #dbeafe;
     }
     .summary-panel[hidden] { display: none; }
+    /* STRAT redesign: grid dashboard for the marked position. */
+    .strat-view { position: fixed; left: 20px; right: 20px; top: 84px; bottom: 16px; z-index: 21;
+      display: grid; gap: 10px;
+      grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      grid-template-areas: "header header" "legs legs" "payoff pnltime" "kpis kpis"; }
+    .strat-view[hidden] { display: none; }
+    .sv-card { border: 1px solid rgba(34,211,238,.18); border-radius: 12px; background: rgba(6,10,16,.86);
+      box-shadow: 0 10px 26px rgba(0,0,0,.30); padding: 7px 11px; overflow: hidden; min-height: 0; min-width: 0; }
+    .sv-header { grid-area: header; padding: 12px 18px; }
+    .sv-payoff { grid-area: payoff; padding: 4px; }
+    .sv-kpis { grid-area: kpis; }
+    .sv-pnltime { grid-area: pnltime; padding: 4px; }
+    .sv-greeks { grid-area: greeks; }
+    .sv-legs { grid-area: legs; }
+    .sv-h { color: #9fb0c3; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin: 0 0 6px; }
+    .sv-title { color: #e5f2ff; font-size: 13px; font-weight: 800; }
+    .sv-hrow { display: flex; align-items: flex-end; gap: 24px; margin-top: 6px; flex-wrap: wrap; }
+    .sv-pnl { display: flex; flex-direction: column; }
+    .sv-pnl .sv-lab { color: #9fb0c3; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+    .sv-pnl .sv-big { font-size: 24px; font-weight: 900; line-height: 1.05; }
+    .sv-pnl .sv-sub { font-size: 11px; color: #9fb0c3; }
+    .sv-pnl.pos .sv-big { color: #00e676; } .sv-pnl.neg .sv-big { color: #ff3b4f; }
+    .sv-hcell { display: flex; flex-direction: column; }
+    .sv-hcell .sv-lab { color: #9fb0c3; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+    .sv-hcell .sv-val { color: #e5eefb; font-size: 14px; font-weight: 700; }
+    .hg-group { display: flex; flex-direction: column; margin-left: auto; }
+    .hg-row { display: flex; gap: 18px; margin-top: 4px; }
+    .hg { display: flex; flex-direction: column; }
+    .hg-k { color: #9fb0c3; font-size: 9px; text-transform: uppercase; letter-spacing: .03em; }
+    .hg-v { font-size: 15px; font-weight: 800; color: #e5eefb; }
+    .hg-v.pos { color: #00e676; } .hg-v.neg { color: #ff3b4f; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px 14px; }
+    .gk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 14px; }
+    .kpi, .gk { display: flex; flex-direction: column; }
+    .kpi-k, .gk-k { color: #9fb0c3; font-size: 9px; text-transform: uppercase; letter-spacing: .03em; }
+    .kpi-v { color: #e5eefb; font-size: 14px; font-weight: 700; }
+    .gk-v { color: #e5eefb; font-size: 15px; font-weight: 800; }
+    .kpi-v.pos, .gk-v.pos { color: #00e676; } .kpi-v.neg, .gk-v.neg { color: #ff3b4f; } .kpi-v.be { color: #22d3ee; }
+    .legs-tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    .legs-tbl th { color: #9fb0c3; font-weight: 600; text-align: right; padding: 4px 2px; border-bottom: 1px solid rgba(148,163,184,.18); font-size: 9.5px; text-transform: uppercase; white-space: nowrap; }
+    .legs-tbl th:first-child, .legs-tbl td:first-child { text-align: left; }
+    .legs-tbl td { text-align: right; padding: 4px 2px; color: #dbeafe; white-space: nowrap; line-height: 1.3; }
+    .legs-tbl th.grp, .legs-tbl td.grp { border-left: 1px solid rgba(148,163,184,.13); padding-left: 8px; }
+    .legs-tbl tr.lg-sub td { background: rgba(148,163,184,.05); color: #b9c6d6; }
+    .legs-tbl tr.lg-sub td:first-child { color: #9fb0c3; }
+    .legs-tbl tr.lg-total td { border-top: 1px solid rgba(148,163,184,.38); font-weight: 500; padding-top: 7px; padding-bottom: 7px; }
+    .legs-tbl tr.lg-total.pos td { color: #34d399; } .legs-tbl tr.lg-total.neg td { color: #f87171; }
+    .legs-tbl td.pos { color: #00e676; } .legs-tbl td.neg { color: #ff3b4f; }
+    .legs-tbl .pnl-side { color: #22d3ee; font-weight: 700; }
+    .legs-tbl .pnl-ls-s { color: #ff3b4f; font-weight: 700; } .legs-tbl .pnl-ls-l { color: #00e676; font-weight: 700; }
+    #payoffChart, #pnlTimeChart { width: 100%; height: 100%; }
+    /* STRAT view: hide Spot-only toolbar buttons; show Save only here. */
+    .strat-mode #startBtn, .strat-mode #gammaToggle, .strat-mode #wallsToggle { display: none !important; }
+    .save-record-btn { display: none; }
+    .strat-mode .save-record-btn { display: inline-flex; align-items: center; border-color: rgba(0,230,118,.5); }
+    .strat-mode .save-record-btn:hover { background: rgba(0,230,118,.15); color: #fff; }
+    .save-record-btn svg { width: 15px; height: 15px; }
+    .save-record-btn.saving { opacity: .55; }
+    .save-record-btn.save-ok { border-color: #00e676 !important; color: #00e676 !important; }
+    .save-record-btn.save-err { border-color: #ff3b4f !important; color: #ff3b4f !important; }
     /* Design panels removed: payoff + PnL now fill the freed left space. */
     .strat-mode .payoff-chart { left: 24px; }
     .strat-mode .summary-panel { left: 24px; }
@@ -709,13 +775,14 @@
       <button id="gammaToggle" class="file-btn" type="button" title="Perfil de gamma por strike">GEX</button>
       <button id="wallsToggle" class="file-btn" type="button" title="Muros de gamma + variacion 5/15/30m">Walls</button>
       <button id="chainToggle" class="file-btn" type="button" title="Abrir STRAT en nueva pestana" aria-label="Abrir STRAT en nueva pestana"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M17 7 7 17"/><path d="M14 21H5a2 2 0 0 1-2-2V10"/></svg></button>
+      <button id="saveRecordBtn" class="file-btn save-record-btn" type="button" title="Guardar captura + datos de la posicion en outputs/trading_record" aria-label="Guardar posicion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg></button>
       <input id="csvInput" type="file" accept=".csv,text/csv">
     </div>
   </div>
 
   <aside class="spot-card">
     <div class="spot-main"><img id="spotLogo" class="spot-logo" alt="" hidden><div class="spot-v" id="spotValue">--</div></div>
-    <div class="spot-meta"><span id="spotTime">sin lectura</span><span id="spotChange" class="chg"></span></div>
+    <div class="spot-meta"><span><span id="spotTime">sin lectura</span><span id="apiHealthDot" class="health-dot" title="API status: sin lectura"></span></span><span id="spotChange" class="chg"></span></div>
   </aside>
 
   <aside class="strike-card" id="strikeCard">
@@ -778,10 +845,13 @@
     <div class="strat-item" data-strategy="short_strangle"><span class="chk"></span> Short Strangle</div>
     <div id="strategyLegs" class="strat-legs"></div>
   </aside>
-  <div id="payoffChart" class="payoff-chart" hidden></div>
-  <aside id="strategySummary" class="summary-panel" hidden>
-    <div id="summaryBody"></div>
-  </aside>
+  <div id="stratView" class="strat-view" hidden>
+    <div id="svHeader" class="sv-card sv-header"></div>
+    <div id="payoffChart" class="sv-card sv-payoff"></div>
+    <div id="svKpis" class="sv-card sv-kpis"></div>
+    <div id="pnlTimeChart" class="sv-card sv-pnltime"></div>
+    <div id="svLegs" class="sv-card sv-legs"></div>
+  </div>
 
   <script>
     const nf2 = new Intl.NumberFormat("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -838,7 +908,7 @@
       } catch (_) {}
       return null;
     }
-    const state = { rows: [], symbol: initialSymbol(), file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null, payoffLoading: false, lastPayoffRefreshKey: null, premium: null, premiumPast: false, premiumDay: null, selected: [], series: {}, anchorEntry: null, anchorActive: false, showGamma: false, showWalls: false, showGammaHistory: false, showGreeks: false, greekDelta: true, greekGamma: false, greekTheta: false, greekVega: false, spreadMode: 0, greekActiveAxis: "delta", showIV: false, gamma: null, latestDay: null, previousClose: null, hideUnderlying: false, premiumMode: 0, premiumPct: false, expirations: null, tickers: [], rangeMode: initialRangeMode(), chartConfig: { use_rth_only: true, rth_start_bcn: "15:30", rth_end_bcn: "22:50", rth_timezone: "BCN" }, chartRangeKey: "" };
+    const state = { rows: [], symbol: initialSymbol(), file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null, payoffLoading: false, lastPayoffRefreshKey: null, premium: null, premiumPast: false, premiumDay: null, selected: [], series: {}, anchorEntry: null, anchorActive: false, showGamma: false, showWalls: false, showGammaHistory: false, showGreeks: false, greekDelta: true, greekGamma: false, greekTheta: false, greekVega: false, spreadMode: 0, greekActiveAxis: "delta", showIV: false, gamma: null, health: null, healthLast: 0, healthLoading: false, latestDay: null, previousClose: null, hideUnderlying: false, premiumMode: 0, premiumPct: false, expirations: null, tickers: [], rangeMode: initialRangeMode(), chartConfig: { use_rth_only: true, rth_start_bcn: "15:30", rth_end_bcn: "22:50", rth_timezone: "BCN" }, chartRangeKey: "" };
     const $ = id => document.getElementById(id);
 
     function parseCsv(text) {
@@ -1607,6 +1677,39 @@
         .filter(l => Number.isFinite(l.strike));
       return { legs, expiration: saved.expiration || "", day: saved.day || "" };
     }
+    function stratAnchorTs() {  // entry moment from the shared chart state (strat doesn't restore it)
+      const saved = readChartState();
+      const a = saved && saved.anchorEntry, day = saved && saved.day;
+      if (!saved || !saved.anchorActive || !a || !day || !Number.isInteger(a.hh) || !Number.isInteger(a.mm)) return null;
+      return `${day} ${String(a.hh).padStart(2, "0")}:${String(a.mm).padStart(2, "0")}:00`;
+    }
+    function premiumAtTsArr(t, last, ts) {
+      let v = null;
+      for (let i = 0; i < t.length; i++) { if (t[i] <= ts) { const x = Number(last[i]); if (Number.isFinite(x)) v = x; } else break; }
+      if (v == null) for (let i = 0; i < last.length; i++) { const x = Number(last[i]); if (Number.isFinite(x)) { v = x; break; } }
+      return v;
+    }
+    function _erf01(x) {  // Abramowitz-Stegun approximation of erf
+      const t = 1 / (1 + 0.3275911 * Math.abs(x));
+      const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+      return x >= 0 ? y : -y;
+    }
+    const normCdf01 = z => 0.5 * (1 + _erf01(z / Math.SQRT2));
+    function detectStrategyName(legs) {
+      const nm = l => `${l.ls === "S" ? "Short" : "Long"} ${l.side === "call" ? "Call" : "Put"}`;
+      const n = legs.length;
+      if (n === 1) return nm(legs[0]);
+      if (n === 2) {
+        const sides = legs.map(l => l.side).sort().join("/");
+        const allS = legs.every(l => l.ls === "S"), allL = legs.every(l => l.ls === "L");
+        const sameK = legs[0].strike === legs[1].strike;
+        if (sides === "call/put") return sameK ? (allS ? "Short Straddle" : allL ? "Long Straddle" : "Straddle")
+                                              : (allS ? "Short Strangle" : allL ? "Long Strangle" : "Strangle");
+        return "Vertical";
+      }
+      if (n === 4) return "Iron Condor / Mariposa";
+      return `Custom (${n} patas)`;
+    }
     async function fetchLegQuote(strike, side, expiration, day) {
       const url = new URL("/api/premium-series", location.origin);
       url.searchParams.set("ticker", state.symbol);
@@ -1618,8 +1721,10 @@
       const leg = side === "call" ? data.call : data.put;
       if (!leg || !Array.isArray(leg.last)) return null;
       const lastFinite = arr => { for (let i = (arr || []).length - 1; i >= 0; i--) { const v = Number(arr[i]); if (Number.isFinite(v)) return v; } return null; };
+      const firstFinite = arr => { for (let i = 0; i < (arr || []).length; i++) { const v = Number(arr[i]); if (Number.isFinite(v)) return v; } return null; };
       return {
-        prime: lastFinite(leg.last),
+        t: leg.t || [], lastArr: leg.last || [], ivArr: leg.impl_vol || [],
+        prime: lastFinite(leg.last), first: firstFinite(leg.last),
         delta: lastFinite(leg.delta), gamma: lastFinite(leg.gamma),
         theta: lastFinite(leg.theta), vega: lastFinite(leg.vega), iv: lastFinite(leg.impl_vol),
         dte: data.dte,
@@ -1628,34 +1733,53 @@
     async function loadMarkedPayoff() {
       if (!state.stratMode) return;
       const { legs, expiration, day } = markedLegsFromState();
-      if (!legs.length) { state.payoff = null; renderSummary(null); drawPayoff(null); return; }  // sin marcas -> sin mensaje
+      const view = $("stratView");
+      const clear = () => { state.payoff = null; if (view) view.hidden = true; drawPayoff(null); drawPnlTime(null); };
+      if (!legs.length) { clear(); return; }  // sin marcas -> vacio, sin mensaje
       const quotes = await Promise.all(legs.map(l => fetchLegQuote(l.strike, l.side, expiration, day).catch(() => null)));
+      const anchorTs = stratAnchorTs();
       const full = [];
-      legs.forEach((l, i) => { const q = quotes[i]; if (q && Number.isFinite(q.prime)) full.push({ ...l, ...q }); });
-      if (!full.length) { state.payoff = null; renderSummary(null); drawPayoff(null); return; }
-      state.payoff = computeGenericPayoff(full, expiration);
+      legs.forEach((l, i) => {
+        const q = quotes[i]; if (!q || !Number.isFinite(q.prime)) return;
+        let entry = anchorTs ? premiumAtTsArr(q.t, q.lastArr, anchorTs) : q.first;
+        if (!Number.isFinite(entry)) entry = q.prime;
+        let ivEntry = anchorTs ? premiumAtTsArr(q.t, q.ivArr, anchorTs) : (q.ivArr.find(v => Number.isFinite(Number(v))) != null ? Number(q.ivArr.find(v => Number.isFinite(Number(v)))) : q.iv);
+        full.push({ ...l, ...q, entry, ivEntry: Number.isFinite(ivEntry) ? ivEntry : q.iv });
+      });
+      if (!full.length) { clear(); return; }
+      if (view) view.hidden = false;
+      state.payoff = computeGenericPayoff(full, expiration, anchorTs);
       renderSummary(state.payoff);
       drawPayoff(state.payoff);
+      drawPnlTime(state.payoff);
     }
-    // Generic multi-leg payoff (expiry P&L) + net credit/debit + BEs + net LIVE greeks.
-    function computeGenericPayoff(legs, expiration) {
+    // Full multi-leg position: expiry payoff + net credit/debit + BEs + live P&L (per leg
+    // and total) + per-share position greeks + POP + theta/day + P&L over time.
+    function computeGenericPayoff(legs, expiration, anchorTs) {
       const mult = 100;
-      const posSign = l => (l.ls === "S" ? -1 : 1);           // position greek sign (short = -)
-      let net = 0;
-      legs.forEach(l => { net += (l.ls === "S" ? 1 : -1) * (l.prime || 0) * mult; });  // credit(+)/debit(-)
+      const posSign = l => (l.ls === "S" ? -1 : 1);    // greeks: short -, long +
+      const credSign = l => (l.ls === "S" ? 1 : -1);   // premium/P&L credit: short +, long -
+      const spotRows = normalizedRows();
+      const spot = spotRows.length ? spotRows[spotRows.length - 1].spot : null;
+      let netNow = 0, netEntry = 0, netPnl = 0;
+      legs.forEach(l => {
+        netNow += credSign(l) * (l.prime || 0) * mult;
+        netEntry += credSign(l) * (l.entry || 0) * mult;
+        l._pnl = credSign(l) * ((l.entry || 0) - (l.prime || 0)) * mult;
+        netPnl += l._pnl;
+      });
       const ks = legs.map(l => l.strike);
-      const liveRows = normalizedRows();
-      const spot = liveRows.length ? liveRows[liveRows.length - 1].spot : null;
       let lo = Math.min(...ks), hi = Math.max(...ks);
       if (Number.isFinite(spot)) { lo = Math.min(lo, spot); hi = Math.max(hi, spot); }
       const pad = Math.max((hi - lo) * 0.6, hi * 0.03, 1);
       const xMin = lo - pad, xMax = hi + pad, n = 161;
       const x = Array.from({ length: n }, (_, i) => xMin + (xMax - xMin) * i / (n - 1));
-      const legPnl = (l, S) => {
+      const legPnlAt = (l, S) => {  // payoff uses the ENTRY credit (fixed at open)
+        const base = (l.entry != null ? l.entry : l.prime) || 0;
         const intr = l.side === "call" ? Math.max(S - l.strike, 0) : Math.max(l.strike - S, 0);
-        return (l.ls === "S" ? (l.prime - intr) : (intr - l.prime)) * mult;
+        return (l.ls === "S" ? (base - intr) : (intr - base)) * mult;
       };
-      const expiry = x.map(S => legs.reduce((a, l) => a + legPnl(l, S), 0));
+      const expiry = x.map(S => legs.reduce((a, l) => a + legPnlAt(l, S), 0));
       const bes = [];
       for (let i = 1; i < x.length; i++) {
         const y0 = expiry[i - 1], y1 = expiry[i];
@@ -1666,60 +1790,96 @@
       }
       const maxP = Math.max(...expiry), maxL = Math.min(...expiry);
       const lSlope = expiry[1] - expiry[0], rSlope = expiry[n - 1] - expiry[n - 2];
-      const profitUnbounded = lSlope < -1e-6 || rSlope > 1e-6;
-      const lossUnbounded = lSlope > 1e-6 || rSlope < -1e-6;
-      const sumG = key => legs.reduce((a, l) => a + posSign(l) * (Number.isFinite(l[key]) ? l[key] : 0) * mult, 0);
+      const max_profit = (lSlope < -1e-6 || rSlope > 1e-6) ? null : maxP;
+      const max_loss = (lSlope > 1e-6 || rSlope < -1e-6) ? null : maxL;
+      const sumG = key => legs.reduce((a, l) => a + posSign(l) * (Number.isFinite(l[key]) ? l[key] : 0), 0);  // per share
+      const netGreeks = { delta: sumG("delta"), gamma: sumG("gamma"), theta: sumG("theta"), vega: sumG("vega") };
       const ivs = legs.map(l => l.iv).filter(Number.isFinite);
+      const avgIV = ivs.length ? ivs.reduce((a, b) => a + b, 0) / ivs.length : null;
+      const ivsE = legs.map(l => l.ivEntry).filter(Number.isFinite);
+      const avgIVentry = ivsE.length ? ivsE.reduce((a, b) => a + b, 0) / ivsE.length : null;
+      // P&L over time (net position P&L vs the entry premium of each leg)
+      const acc = new Map();
+      legs.forEach(l => {
+        const base = (l.entry != null ? l.entry : l.prime) || 0;
+        for (let i = 0; i < (l.t || []).length; i++) {
+          const v = Number(l.lastArr[i]); if (!Number.isFinite(v)) continue;
+          const p = credSign(l) * (base - v) * mult;
+          const e = acc.get(l.t[i]) || { s: 0, c: 0 }; e.s += p; e.c++; acc.set(l.t[i], e);
+        }
+      });
+      let pt = [], pv = [];
+      for (const [ts, e] of acc) if (e.c === legs.length) { pt.push(ts); pv.push(e.s); }
+      const ord = pt.map((_, i) => i).sort((a, b) => pt[a] < pt[b] ? -1 : pt[a] > pt[b] ? 1 : 0);
+      const pnlTime = pt.length ? { t: ord.map(i => pt[i]), pnl: ord.map(i => pv[i]) } : null;
+      // POP: lognormal final spot; profit region = expiry > 0
+      let pop = null;
+      if (Number.isFinite(spot) && spot > 0 && avgIV && legs[0].dte != null) {
+        const T = Math.max(Number(legs[0].dte), 1) / 365, sd = avgIV * Math.sqrt(T), mn = Math.log(spot) - 0.5 * avgIV * avgIV * T;
+        const cdf = K => (K > 0 ? normCdf01((Math.log(K) - mn) / sd) : 0);
+        let p = 0;
+        for (let i = 1; i < x.length; i++) if (expiry[i - 1] > 0 || expiry[i] > 0) p += Math.max(0, cdf(x[i]) - cdf(x[i - 1]));
+        pop = Math.min(1, Math.max(0, p));
+      }
+      const distBEs = (Number.isFinite(spot) && spot) ? bes.map(b => (b - spot) / spot * 100) : [];
+      const pctOfMax = (max_profit != null && max_profit > 0) ? (netPnl / max_profit) : null;
       return {
-        generic: true, symbol: state.symbol, expiration, dte: legs[0].dte,
-        legs: legs.map(l => ({ side: l.side, strike: l.strike, ls: l.ls, iv: l.iv, prime: l.prime,
-          greeks: { delta: posSign(l) * (l.delta || 0) * mult, gamma: posSign(l) * (l.gamma || 0) * mult,
-                    theta: posSign(l) * (l.theta || 0) * mult, vega: posSign(l) * (l.vega || 0) * mult, rho: null } })),
-        net, netGreeks: { delta: sumG("delta"), gamma: sumG("gamma"), theta: sumG("theta"), vega: sumG("vega"), rho: null },
-        avgIV: ivs.length ? ivs.reduce((a, b) => a + b, 0) / ivs.length : null,
-        max_profit: profitUnbounded ? null : maxP, max_loss: lossUnbounded ? null : maxL,
-        bes, x, expiry,
+        generic: true, symbol: state.symbol, expiration, dte: legs[0].dte, spot,
+        name: detectStrategyName(legs), anchorHM: anchorTs ? anchorTs.slice(11, 16) : null,
+        legs: legs.map(l => ({ side: l.side, strike: l.strike, ls: l.ls, iv: l.iv, ivEntry: l.ivEntry, prime: l.prime, entry: l.entry, pnl: l._pnl,
+          greeks: { delta: posSign(l) * (l.delta || 0), gamma: posSign(l) * (l.gamma || 0), theta: posSign(l) * (l.theta || 0), vega: posSign(l) * (l.vega || 0) } })),
+        net: netNow, netEntry, netNow, netPnl, netGreeks, avgIV, avgIVentry, thetaDay: netGreeks.theta * mult,
+        pop, distBEs, pctOfMax, max_profit, max_loss, bes, x, expiry, pnlTime,
       };
     }
-    function greeksTableGeneric(d) {
-      const rows = d.legs.map(l => greekRow(`${l.ls === "S" ? "SHORT" : "LONG"} ${l.side.toUpperCase()} ${fmt0(l.strike)}`,
-        l.greeks, pct(l.iv), fmt2(l.prime), d.dte != null ? fmt0(d.dte) : "", fmt0(l.strike))).join("");
-      const net = greekRow("NET", d.netGreeks, d.avgIV != null ? pct(d.avgIV) : "--", "", "", "", "net");
-      return `<table class="greeks-table">
-        <thead><tr><th>Griegas</th><th>DTE</th><th>Strike</th><th>IV</th><th>Prime</th><th>Delta</th><th>Gamma</th><th>Theta/d</th><th>Vega</th><th>Rho</th></tr></thead>
-        <tbody>${rows}${net}</tbody></table>`;
+    // Mini chart: net position P&L over time (green if in profit, red if in loss).
+    function drawPnlTime(d) {
+      const el = $("pnlTimeChart");
+      if (!el || !window.Plotly) return;
+      if (!d || !d.pnlTime || !d.pnlTime.t.length) { Plotly.purge("pnlTimeChart"); return; }
+      const t = d.pnlTime.t, y = d.pnlTime.pnl, up = y[y.length - 1] >= 0;
+      const fill = { x: t, y, mode: "lines", line: { width: 0 }, fill: "tozeroy", fillcolor: up ? "rgba(0,230,118,0.12)" : "rgba(180,48,66,0.12)", hoverinfo: "skip", showlegend: false };
+      const line = { x: t, y, mode: "lines", name: "P&L", line: { color: up ? "#00e676" : "#ff3b4f", width: 1.6 }, hovertemplate: "%{x|%H:%M}<br>P&L %{y:,.0f} $<extra></extra>" };
+      const layout = {
+        paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", separators: ",.",
+        font: { color: "#9fb0c3", family: "Inter, Arial, sans-serif", size: 10 },
+        margin: { l: 48, r: 10, t: 8, b: 22 }, hovermode: "x unified", showlegend: false,
+        xaxis: { showgrid: false, zeroline: false, color: "#9fb0c3", tickfont: { size: 9 }, tickformat: "%H:%M",
+          showspikes: true, spikecolor: "#22d3ee", spikethickness: 1, spikedash: "dot", spikemode: "across", spikesnap: "cursor" },
+        yaxis: { gridcolor: "rgba(148,163,184,0.08)", zerolinecolor: "rgba(203,213,225,0.4)", tickformat: ",.0f", color: "#9fb0c3", tickfont: { size: 9 } },
+        shapes: [{ type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: 0, y1: 0, line: { color: "rgba(203,213,225,0.5)", width: 1 } }],
+      };
+      Plotly.react("pnlTimeChart", [fill, line], layout, { responsive: true, displayModeBar: false });
     }
     function drawPayoffGeneric(d) {
       const el = $("payoffChart");
       if (!el || !window.Plotly) return;
-      el.hidden = false;
-      const x = d.x, expiry = d.expiry;
-      const liveRows = normalizedRows();
-      const spot = liveRows.length ? liveRows[liveRows.length - 1].spot : null;
+      const x = d.x, expiry = d.expiry, spot = d.spot;
       const yPos = expiry.map(v => Math.max(v, 0)), yNeg = expiry.map(v => Math.min(v, 0));
       const posFill = { x, y: yPos, mode: "lines", line: { width: 0 }, fill: "tozeroy", fillcolor: "rgba(0,230,118,0.16)", hoverinfo: "skip", showlegend: false };
       const negFill = { x, y: yNeg, mode: "lines", line: { width: 0 }, fill: "tozeroy", fillcolor: "rgba(180,48,66,0.16)", hoverinfo: "skip", showlegend: false };
-      const line = { x, y: expiry, mode: "lines", name: "PnL venc.", line: { color: "#e5f2ff", width: 2.4 }, hovertemplate: "%{x:,.0f}<br>PnL venc. %{y:,.0f}<extra></extra>" };
+      const line = { x, y: expiry, mode: "lines", name: "PnL venc.", line: { color: "#2f9e6a", width: 2.2 }, hovertemplate: "%{x:,.0f}<br>PnL venc. %{y:,.0f} $<extra></extra>" };
       const yVals = [...expiry, 0], yMin = Math.min(...yVals), yMax = Math.max(...yVals), ySpan = Math.max(yMax - yMin, 1);
       const strikeShapes = [], strikeAnnos = [], seen = new Set();
       d.legs.forEach(l => { const key = `${l.side}|${l.strike}`; if (seen.has(key)) return; seen.add(key);
-        strikeShapes.push({ type: "line", xref: "x", yref: "paper", x0: l.strike, x1: l.strike, y0: 0, y1: 0.80, line: { color: "#facc15", width: 1 } });
-        strikeAnnos.push({ x: l.strike, yref: "paper", y: 0.83, text: `${l.side === "call" ? "C" : "P"} ${fmt0(l.strike)} ${l.ls}`, showarrow: false, font: { color: "#facc15", size: 11 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#facc15", borderwidth: 1, borderpad: 3 });
+        strikeShapes.push({ type: "line", xref: "x", yref: "paper", x0: l.strike, x1: l.strike, y0: 0, y1: 0.82, line: { color: "#facc15", width: 1 } });
+        strikeAnnos.push({ x: l.strike, yref: "paper", y: 0.86, text: `${l.side === "call" ? "C" : "P"}${fmt0(l.strike)} ${l.ls}`, showarrow: false, font: { color: "#facc15", size: 10 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#facc15", borderwidth: 1, borderpad: 2 });
       });
-      const beShapes = d.bes.map(b => ({ type: "line", xref: "x", yref: "paper", x0: b, x1: b, y0: 0, y1: 1, line: { color: "#22d3ee", width: 1.4 } }));
-      const beAnnos = d.bes.map(b => ({ x: b, yref: "paper", y: 0.99, text: `BE ${fmt0(b)}`, showarrow: false, font: { color: "#22d3ee", size: 11 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#22d3ee", borderwidth: 1, borderpad: 2 }));
-      const spotShape = Number.isFinite(spot) ? [{ type: "line", xref: "x", yref: "paper", x0: spot, x1: spot, y0: 0, y1: 0.88, line: { color: "#ffffff", width: 1, dash: "dash" } }] : [];
-      const spotAnno = Number.isFinite(spot) ? [{ x: spot, yref: "paper", y: 0.91, text: `Spot ${fmt2(spot)}`, showarrow: false, font: { color: "#ffffff", size: 12 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#ffffff", borderwidth: 1, borderpad: 3 }] : [];
-      const legsTxt = d.legs.map(l => `${l.ls} ${l.side === "call" ? "C" : "P"}${fmt0(l.strike)}`).join("  ");
+      const beShapes = d.bes.map(b => ({ type: "line", xref: "x", yref: "paper", x0: b, x1: b, y0: 0, y1: 1, line: { color: "#22d3ee", width: 1.2 } }));
+      const beAnnos = d.bes.map(b => ({ x: b, yref: "paper", y: 1, yanchor: "top", text: `BE ${fmt0(b)}`, showarrow: false, font: { color: "#22d3ee", size: 10 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#22d3ee", borderwidth: 1, borderpad: 2 }));
+      const spotShape = Number.isFinite(spot) ? [{ type: "line", xref: "x", yref: "paper", x0: spot, x1: spot, y0: 0, y1: 0.90, line: { color: "#ffffff", width: 1, dash: "dash" } }] : [];
+      const spotAnno = Number.isFinite(spot) ? [{ x: spot, yref: "paper", y: 0.93, text: `Spot ${fmt2(spot)}`, showarrow: false, font: { color: "#ffffff", size: 10 }, bgcolor: "rgba(3,7,18,0.88)", bordercolor: "#ffffff", borderwidth: 1, borderpad: 2 }] : [];
+      // Current mark-to-market P&L: thin acid-magenta dashed line across the chart.
+      const pnlNowShape = Number.isFinite(d.netPnl) ? [{ type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: d.netPnl, y1: d.netPnl, line: { color: "rgba(232,121,249,0.4)", width: 1, dash: "dash" } }] : [];
+      const pnlNowAnno = Number.isFinite(d.netPnl) ? [{ xref: "paper", x: 0.015, xanchor: "left", yref: "y", y: d.netPnl, yanchor: "bottom", text: `PnL ahora ${svMoney(d.netPnl)}`, showarrow: false, font: { color: "rgba(232,121,249,0.85)", size: 9 } }] : [];
       const layout = {
-        title: { text: `${esc(d.symbol)} ${esc(d.expiration || "")} - DTE ${d.dte != null ? d.dte : ""} - ${esc(legsTxt)}`, font: { color: "#e5f2ff", size: 15, weight: 800 }, x: 0.5 },
-        paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", separators: ".,",
-        font: { color: "#cbd5e1", family: "Inter, Arial, sans-serif", size: 11 },
-        margin: { l: 64, r: 20, t: 44, b: 42 }, hovermode: "x unified", showlegend: false,
-        xaxis: { range: [x[0], x[x.length - 1]], showgrid: false, zeroline: false, tickformat: ",.0f", nticks: 20, color: "#cbd5e1", tickfont: { size: 12 } },
-        yaxis: { range: [yMin - ySpan * 0.10, yMax + ySpan * 0.10], gridcolor: "rgba(148,163,184,0.08)", zerolinecolor: "rgba(203,213,225,0.45)", tickformat: ",.0f", color: "#cbd5e1" },
-        shapes: [...strikeShapes, ...beShapes, ...spotShape, { type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: 0, y1: 0, line: { color: "rgba(203,213,225,0.55)", width: 1 } }],
-        annotations: [...strikeAnnos, ...beAnnos, ...spotAnno],
+        paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", separators: ",.",
+        font: { color: "#cbd5e1", family: "Inter, Arial, sans-serif", size: 10 },
+        margin: { l: 52, r: 12, t: 16, b: 28 }, hovermode: "x unified", showlegend: false,
+        xaxis: { range: [x[0], x[x.length - 1]], showgrid: false, zeroline: false, tickformat: ",.0f", nticks: 14, color: "#cbd5e1", tickfont: { size: 10 } },
+        yaxis: { range: [yMin - ySpan * 0.10, yMax + ySpan * 0.10], gridcolor: "rgba(148,163,184,0.08)", zerolinecolor: "rgba(203,213,225,0.45)", tickformat: ",.0f", color: "#cbd5e1", tickfont: { size: 10 } },
+        shapes: [...strikeShapes, ...beShapes, ...spotShape, ...pnlNowShape, { type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: 0, y1: 0, line: { color: "rgba(203,213,225,0.55)", width: 1 } }],
+        annotations: [...strikeAnnos, ...beAnnos, ...spotAnno, ...pnlNowAnno],
       };
       Plotly.react("payoffChart", [posFill, negFill, line], layout, { responsive: true, displayModeBar: false });
     }
@@ -1787,44 +1947,100 @@
         </tbody>
       </table>`;
     }
-    function renderSummary(d, errMsg) {
-      const panel = $("strategySummary"), body = $("summaryBody");
-      if (!panel) return;
-      if (errMsg) { panel.hidden = false; body.innerHTML = `<div class="sum-foot">${esc(errMsg)}</div>`; return; }
-      if (!d) { panel.hidden = true; body.innerHTML = ""; return; }
-      if (d.generic) {
-        const maxP = d.max_profit == null ? "&infin;" : fmtMoney0(d.max_profit);
-        const maxL = d.max_loss == null ? "&infin;" : fmtMoney0(d.max_loss);
-        const netCls = d.net >= 0 ? "pos" : "neg";
-        const netLbl = d.net >= 0 ? "Net credit" : "Net debit";
-        const bes = (d.bes && d.bes.length) ? d.bes.map(b => fmtBE0(b)).join(" / ") : "--";
-        body.innerHTML =
-          `<div class="sum-sub">${esc(d.symbol)} ${esc(d.expiration || "")} - DTE ${d.dte != null ? d.dte : ""}</div>
-           <div class="sum-grid">
-             <div><div class="sum-k">${netLbl}</div><div class="sum-v ${netCls}">${fmtMoney0(d.net)}</div></div>
-             <div><div class="sum-k">Max profit</div><div class="sum-v pos">${maxP}</div></div>
-             <div><div class="sum-k">Max loss</div><div class="sum-v neg">${maxL}</div></div>
-             <div><div class="sum-k">Break-evens</div><div class="sum-v be">${bes}</div></div>
-           </div>
-           <div class="sum-foot">${greeksTableGeneric(d)}</div>`;
-        panel.hidden = false;
-        return;
-      }
-      body.innerHTML =
-        `<div class="sum-sub">${strategyName(d.strategy)} - ${esc(d.symbol)} ${esc(d.expiration)} @ ${strategyStrikeText(d)} - DTE ${d.dte}</div>
-         <div class="sum-grid">
-           <div><div class="sum-k">Net credit</div><div class="sum-v pos">${fmtMoney0(d.net)}</div></div>
-           <div><div class="sum-k">Max profit</div><div class="sum-v pos">${fmtMoney0(d.max_profit)}</div></div>
-           <div><div class="sum-k">Max loss</div><div class="sum-v neg">&infin;</div></div>
-           <div><div class="sum-k">Chance</div><div class="sum-v">--</div></div>
-           <div><div class="sum-k">Min. BE</div><div class="sum-v be">${fmtBE0(d.be_low)}</div></div>
-           <div><div class="sum-k">Max. BE</div><div class="sum-v be">${fmtBE0(d.be_high)}</div></div>
-         </div>
-         <div class="sum-foot">
-           ${greeksTable(d)}
-         </div>`;
-      panel.hidden = false;
-    }    function drawPayoff(d) {
+    function renderSummary(d) {
+      const view = $("stratView");
+      if (!view) return;
+      if (!d || !d.generic) { view.hidden = true; return; }
+      $("svHeader").innerHTML = stratHeaderHtml(d);
+      $("svKpis").innerHTML = stratKpisHtml(d);
+      $("svLegs").innerHTML = stratLegsHtml(d);
+      view.hidden = false;
+    }
+    const svMoney = v => v == null ? "--" : (v < 0 ? "−" : "+") + fmtMoney0(Math.abs(v));   // signed money ($ prefix)
+    const svG = (v, dec) => v == null ? "--" : `${v >= 0 ? "+" : ""}${new Intl.NumberFormat("es-ES", { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(v)}`;
+    function stratHeaderHtml(d) {
+      const pnlCls = d.netPnl >= 0 ? "pos" : "neg";
+      const pctMax = (d.pctOfMax != null) ? ` (${Math.round(d.pctOfMax * 100)}% del máx)` : "";
+      const cred = d.netNow >= 0 ? "Crédito" : "Débito";
+      const ng = d.netGreeks;
+      const gk = (k, v, dec) => `<div class="hg"><span class="hg-k">${k}</span><span class="hg-v ${(v || 0) >= 0 ? "pos" : "neg"}">${svG(v, dec)}</span></div>`;
+      return `<div class="sv-title">${esc(d.name)} · ${esc(d.symbol)} · venc. ${esc(d.expiration || "")} (DTE ${d.dte != null ? d.dte : "--"})${d.anchorHM ? " · Entry " + esc(d.anchorHM) : ""}</div>
+        <div class="sv-hrow">
+          <div class="sv-pnl ${pnlCls}"><span class="sv-lab">P&amp;L total</span><span class="sv-big">${svMoney(d.netPnl)}</span><span class="sv-sub">${pctMax}</span></div>
+          <div class="sv-hcell"><span class="sv-lab">${cred}</span><span class="sv-val">${fmtMoney0(d.netEntry)} → ${fmtMoney0(d.netNow)}</span></div>
+          <div class="sv-hcell"><span class="sv-lab">Spot</span><span class="sv-val">${d.spot != null ? fmt2(d.spot) : "--"}</span></div>
+          <div class="hg-group"><span class="sv-lab">Griegas netas (posición · por acción)</span>
+            <div class="hg-row">${gk("Delta", ng.delta, 2)}${gk("Gamma", ng.gamma, 4)}${gk("Theta", ng.theta, 2)}${gk("Vega", ng.vega, 3)}<div class="hg"><span class="hg-k">IV media</span><span class="hg-v">${d.avgIV != null ? Math.round(d.avgIV * 100) + "%" : "--"}</span></div></div>
+          </div>
+        </div>`;
+    }
+    function stratKpisHtml(d) {
+      const kpi = (k, v, cls) => `<div class="kpi"><div class="kpi-k">${k}</div><div class="kpi-v ${cls || ""}">${v}</div></div>`;
+      const mp = d.max_profit == null ? "&infin;" : fmtMoney0(d.max_profit);
+      const ml = d.max_loss == null ? "&infin;" : fmtMoney0(d.max_loss);
+      const be = d.bes && d.bes.length ? d.bes.map(b => fmt0(b)).join(" / ") : "--";
+      const pop = d.pop != null ? Math.round(d.pop * 100) + "%" : "--";
+      const th = d.thetaDay != null ? svMoney(d.thetaDay) : "--";
+      const dist = (d.bes && d.bes.length && Number.isFinite(d.spot))
+        ? d.bes.map((b, i) => { const pts = b - d.spot, pc = (d.distBEs && d.distBEs[i] != null) ? d.distBEs[i] : (d.spot ? pts / d.spot * 100 : 0); return `${pts >= 0 ? "+" : "−"}${fmt0(Math.abs(pts))} (${pc >= 0 ? "+" : "−"}${fmt1(Math.abs(pc))}%)`; }).join(" / ")
+        : "--";
+      return `<div class="sv-h">Métricas</div><div class="kpi-grid">
+        ${kpi("Max profit", mp, "pos")}${kpi("Max loss", ml, "neg")}
+        ${kpi("Break-evens", be, "be")}${kpi("POP", pop)}
+        ${kpi("Theta/día", th, (d.thetaDay || 0) >= 0 ? "pos" : "neg")}${kpi("Dist. a BE", dist, "be")}
+      </div>`;
+    }
+    function stratGreeksHtml(d) {
+      const ng = d.netGreeks;
+      const cell = (k, v, dec) => `<div class="gk"><div class="gk-k">${k}</div><div class="gk-v ${(v || 0) >= 0 ? "pos" : "neg"}">${svG(v, dec)}</div></div>`;
+      return `<div class="sv-h">Griegas netas (posición, por acción)</div><div class="gk-grid">
+        ${cell("Delta", ng.delta, 2)}${cell("Gamma", ng.gamma, 4)}
+        ${cell("Theta", ng.theta, 2)}${cell("Vega", ng.vega, 3)}
+        <div class="gk"><div class="gk-k">IV media</div><div class="gk-v">${d.avgIV != null ? Math.round(d.avgIV * 100) + "%" : "--"}</div></div>
+      </div>`;
+    }
+    function stratLegsHtml(d) {
+      const ivp = v => v != null ? Math.round(v * 100) + "%" : "--";
+      const entryTime = d.anchorHM || "inicio";
+      const dist = k => (Number.isFinite(d.spot) && d.spot) ? `${(k - d.spot) >= 0 ? "+" : "−"}${fmt1(Math.abs((k - d.spot) / d.spot * 100))}%` : "--";
+      const credSign = l => (l.ls === "S" ? 1 : -1);
+      const legRow = l => {
+        const g = l.greeks, cls = l.pnl >= 0 ? "pos" : "neg";
+        return `<tr>
+          <td><span class="pnl-side">${l.side.toUpperCase()}</span> ${fmt0(l.strike)} <span class="pnl-ls-${l.ls.toLowerCase()}">${l.ls}</span></td>
+          <td>${dist(l.strike)}</td><td>${entryTime}</td>
+          <td class="grp">${ivp(l.ivEntry)}</td><td>${ivp(l.iv)}</td>
+          <td class="grp">${fmt2(l.entry)}</td><td>${fmt2(l.prime)}</td><td class="${cls}">${svMoney(l.pnl)}</td>
+          <td class="grp">${svG(g.delta, 2)}</td><td>${svG(g.gamma, 4)}</td><td>${svG(g.theta, 2)}</td><td>${svG(g.vega, 3)}</td></tr>`;
+      };
+      // Subtotal per strike (very light shading), grouping legs that share a strike.
+      const strikes = [...new Set(d.legs.map(l => l.strike))].sort((a, b) => a - b);
+      const avg = arr => { const f = arr.filter(Number.isFinite); return f.length ? f.reduce((x, y) => x + y, 0) / f.length : null; };
+      let body = "";
+      strikes.forEach(k => {
+        const grp = d.legs.filter(l => l.strike === k);
+        body += grp.map(legRow).join("");
+        if (grp.length > 1) {
+          const sumG = key => grp.reduce((a, l) => a + (l.greeks[key] || 0), 0);
+          const pnl = grp.reduce((a, l) => a + l.pnl, 0);
+          const entS = grp.reduce((a, l) => a + credSign(l) * (l.entry || 0), 0);
+          const nowS = grp.reduce((a, l) => a + credSign(l) * (l.prime || 0), 0);
+          body += `<tr class="lg-sub"><td>Subtotal ${fmt0(k)}</td><td>${dist(k)}</td><td></td>
+            <td class="grp">${ivp(avg(grp.map(l => l.ivEntry)))}</td><td>${ivp(avg(grp.map(l => l.iv)))}</td>
+            <td class="grp">${fmt2(entS)}</td><td>${fmt2(nowS)}</td><td class="${pnl >= 0 ? "pos" : "neg"}">${svMoney(pnl)}</td>
+            <td class="grp">${svG(sumG("delta"), 2)}</td><td>${svG(sumG("gamma"), 4)}</td><td>${svG(sumG("theta"), 2)}</td><td>${svG(sumG("vega"), 3)}</td></tr>`;
+        }
+      });
+      const ng = d.netGreeks, nc = d.netPnl >= 0 ? "pos" : "neg";
+      const net = `<tr class="lg-total ${nc}"><td>Net</td><td>--</td><td>${entryTime}</td>
+          <td class="grp">${ivp(d.avgIVentry)}</td><td>${ivp(d.avgIV)}</td>
+          <td class="grp">${fmt2(d.netEntry / 100)}</td><td>${fmt2(d.netNow / 100)}</td><td>${svMoney(d.netPnl)}</td>
+          <td class="grp">${svG(ng.delta, 2)}</td><td>${svG(ng.gamma, 4)}</td><td>${svG(ng.theta, 2)}</td><td>${svG(ng.vega, 3)}</td></tr>`;
+      return `<div class="sv-h">Resultados por pata</div>
+        <table class="legs-tbl"><thead><tr><th>Pata</th><th>Dist</th><th>Entry</th><th class="grp">IV ent</th><th>IV now</th><th class="grp">Prima ent</th><th>Prima now</th><th>P&amp;L</th><th class="grp">Delta</th><th>Gamma</th><th>Theta</th><th>Vega</th></tr></thead>
+        <tbody>${body}${net}</tbody></table>`;
+    }
+    function drawPayoff(d) {
       const el = $("payoffChart");
       if (!el || !window.Plotly) return;
       if (!d || !Array.isArray(d.x)) {
@@ -2061,6 +2277,7 @@
         renderStrategy();
       }
       refreshFile();
+      refreshHealthStatus(true);
       loadExpirations();
       if (state.stratMode) { loadNearAtm(); }
       else { initLatestSession(); loadSessionExpirations(); }
@@ -2085,6 +2302,7 @@
       const diffPct = Number.isFinite(prevClose) && prevClose > 0 && Number.isFinite(last.spot) ? (last.spot / prevClose - 1) * 100 : null;
       $("spotValue").textContent = fmt2(last.spot);
       $("spotTime").textContent = `updated ${shortTime(last.timestamp)}`;
+      renderHealthDot();
       $("spotChange").textContent = diffPct == null ? "" : `${diffPct >= 0 ? "+" : ""}${fmt1(diffPct)}%`;
       $("spotChange").title = diffPct == null ? "" : `vs previous close ${fmt2(prevClose)}`;
       $("spotChange").className = `chg ${diffPct == null ? "" : diffPct >= 0 ? "pos" : "neg"}`.trim();
@@ -2416,6 +2634,7 @@
     // Visual-only EMA smoothing for the greek/IV/spread lines (raw data untouched;
     // hover still shows the real value via customdata). Preserves gaps (nulls).
     const GREEK_EMA = 9;
+    const IV_EMA = 21;     // slower EMA for IV; raw values stay in hover via customdata
     const SPOT_EMA = 4;   // faster EMA for the spot line so it keeps more detail
     function emaSmooth(arr, period) {
       const k = 2 / (period + 1);
@@ -2780,7 +2999,7 @@
           if (!leg || !leg.t || !leg.t.length || !Array.isArray(leg.impl_vol)) return;
           const yv = leg.impl_vol.map(v => Number.isFinite(v) ? v : null);
           if (!yv.some(Number.isFinite)) return;
-          const ys = emaSmooth(yv, GREEK_EMA);
+          const ys = emaSmooth(yv, IV_EMA);
           ivTraces.push({ x: leg.t, y: ys, customdata: yv, type: "scatter", mode: "lines",
             name: `IV ${sel.side} ${sel.strike}`, yaxis: "y7",
             line: { color: "#8b5cf6", width: 1 }, connectgaps: true, showlegend: false,
@@ -2800,7 +3019,7 @@
           const ord = st.map((_, i) => i).sort((a, b) => st[a] < st[b] ? -1 : st[a] > st[b] ? 1 : 0);
           st = ord.map(i => st[i]); sy = ord.map(i => sy[i]);
           if (st.length) {
-            const ss = emaSmooth(sy, GREEK_EMA);
+            const ss = emaSmooth(sy, IV_EMA);
             ivTraces.push({ x: st, y: ss, customdata: sy, type: "scatter", mode: "lines", name: "IV media", yaxis: "y7",
               line: { color: "#8b5cf6", width: 1.8 }, connectgaps: true, showlegend: false,
               hovertemplate: `%{x|%d/%m %H:%M}<br>IV media: %{customdata:.1%}<extra></extra>` });
@@ -2952,12 +3171,44 @@
         state.gammaHistory = (data && Array.isArray(data.points) && data.points.length) ? data.points : null;
       } catch (_) { state.gammaHistory = null; }
     }
+    function renderHealthDot() {
+      const dot = $("apiHealthDot");
+      if (!dot) return;
+      const status = state.health && state.health.status ? state.health.status : "";
+      dot.className = `health-dot ${status}`.trim();
+      if (state.health) {
+        dot.title = `API status: ${status} (${state.health.ok}/${state.health.total}) updated ${shortTime(state.health.updated_at || "")}`;
+      } else {
+        dot.title = "API status: sin lectura";
+      }
+    }
+    async function refreshHealthStatus(force = false) {
+      if (!state.httpMode || state.healthLoading) return;
+      const now = Date.now();
+      if (!force && now - (state.healthLast || 0) < 60000) return;
+      state.healthLoading = true;
+      state.healthLast = now;
+      try {
+        const url = new URL("/api/health-check", location.origin);
+        url.searchParams.set("ticker", state.symbol);
+        if (currentDay()) url.searchParams.set("date", currentDay());
+        url.searchParams.set("timeout", "1.5");
+        url.searchParams.set("ts", Date.now());
+        state.health = await (await fetch(url, { cache: "no-store" })).json();
+      } catch (_) {
+        state.health = { status: "red", ok: 0, total: 1, updated_at: new Date().toISOString() };
+      } finally {
+        state.healthLoading = false;
+        renderHealthDot();
+      }
+    }
     async function refreshFile() {
       try {
         if (state.httpMode) await loadHttpCsv();
         else if (state.file) await loadFile(state.file);
         if (state.selected.length) { await refreshSelectedSeries(); if (!state.stratMode && state.rows.length) render(); }
         if (state.showGamma || state.showWalls) { await loadGamma(); if (state.showWalls && state.showGammaHistory) await loadGammaHistory(); if (!state.stratMode && state.rows.length) render(); }
+        refreshHealthStatus(false);
       } catch (err) {
         $("status").className = "status err";
         $("status").textContent = "error CSV";
@@ -3119,6 +3370,33 @@
     }
     initWallsDrag();
     $("chainToggle").addEventListener("click", openStratTab);
+    // Save: capture the STRAT panel (PNG via html2canvas) + its data (JSON) to
+    // outputs/trading_record/<symbol>_<date>_<strikes>_<entry>.
+    async function saveTradingRecord() {
+      const btn = $("saveRecordBtn"), d = state.payoff, view = $("stratView");
+      if (!btn) return;
+      // Feedback via border/color + tooltip; the floppy icon stays put.
+      const flash = (cls, title) => { btn.classList.remove("saving"); btn.classList.add(cls); btn.title = title; setTimeout(() => { btn.classList.remove(cls); btn.title = "Guardar captura + datos de la posicion en outputs/trading_record"; }, 2600); };
+      if (!d || !d.generic || !view || view.hidden) { flash("save-err", "Sin posición para guardar"); return; }
+      btn.classList.add("saving"); btn.disabled = true; btn.title = "Guardando…";
+      try {
+        const saved = readChartState() || {};
+        const day = saved.day || new Date().toISOString().slice(0, 10);
+        const strikes = d.legs.map(l => fmt0(l.strike)).join("-");
+        const entry = d.anchorHM ? d.anchorHM.replace(":", "") : "now";
+        const filename = `${d.symbol}_${day}_${strikes}_${entry}`;
+        let png = "";
+        if (window.html2canvas) {
+          const canvas = await html2canvas(view, { backgroundColor: "#04070d", scale: window.devicePixelRatio > 1 ? 2 : 1, logging: false, useCORS: true });
+          png = canvas.toDataURL("image/png");
+        }
+        const record = { savedAt: new Date().toISOString(), day, filename, ...d };
+        const r = await (await fetch("/api/save-record", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename, png, record }) })).json();
+        if (r && r.ok) flash("save-ok", `Guardado: ${r.name}`); else flash("save-err", "Error al guardar");
+      } catch (_) { flash("save-err", "Error al guardar"); }
+      btn.classList.remove("saving"); btn.disabled = false;
+    }
+    $("saveRecordBtn").addEventListener("click", saveTradingRecord);
     document.addEventListener("click", ev => {
       if (ev.target.closest("#startBtn")) { startLadder(); return; }
       if (ev.target.closest(".send-btn")) { sendToExcel(); return; }

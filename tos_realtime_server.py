@@ -12,6 +12,7 @@ import normalize
 import session_manager
 import session_store as store
 from symbol_map import underlying_symbol_from_option_root
+from utils.black_scholes import bs_greeks, DEFAULT_RATE
 from config import (
     TICKERS,
     SERVER_REQUEST_COOLDOWN_FREQUENCY,
@@ -394,6 +395,34 @@ def read_leg_row(ws, value_row, previous_volume):
     return symbol, row, volume
 
 
+def underlying_spot_from_row(und_row):
+    """Spot for the greek calc: prefer LAST, then MARK, then BID."""
+    for key in ("UNDERLYING_LAST", "UNDERLYING_MARK", "UNDERLYING_BID"):
+        v = safe_float(und_row.get(key))
+        if v and v > 0:
+            return v
+    return None
+
+
+def bs_gamma_value(spot, leg, iv, day):
+    """Gamma via Black-Scholes. TOS's RTD GAMMA is 2-decimal (~0 for small gammas),
+    so we recompute it from the recorded spot + the leg's strike/expiration + live IV.
+    Returns None when inputs are missing so the caller keeps the raw RTD value.
+    """
+    strike = safe_float(leg.get("strike"))
+    sigma = safe_float(iv)
+    if not spot or not strike or not sigma or sigma <= 0:
+        return None
+    try:
+        exp_date = date.fromisoformat(str(leg.get("expiration") or ""))
+    except ValueError:
+        return None
+    dte = (exp_date - day).days
+    T = max(dte, 1) / 365.0  # min 1 day so 0DTE gamma stays finite (as in serve_payoff)
+    g = bs_greeks(spot, strike, T, DEFAULT_RATE, sigma, (leg.get("leg_type") or "C"))
+    return round(g["gamma"], 6)
+
+
 def index_all(day, lbt):
     """Write the session index + tape headers for every ticker."""
     for ticker in TICKERS:
@@ -474,13 +503,18 @@ def main():
             for ticker in TICKERS:
                 tk = ticker.upper()
                 ws = sheets[tk]
-                store.append_row(store.underlying_path(tk, day), store.UNDERLYING_HEADER, read_underlying_row(ws))
+                und_row = read_underlying_row(ws)
+                store.append_row(store.underlying_path(tk, day), store.UNDERLYING_HEADER, und_row)
+                spot = underlying_spot_from_row(und_row)
                 for i, leg in enumerate(lbt.get(tk, [])):
                     value_row = OPTION_FIRST_VALUE_ROW + i
                     sym = leg.get("symbol")
                     contract_sym, row, volume = read_leg_row(ws, value_row, previous_volumes.get(sym))
                     previous_volumes[sym] = volume
                     if contract_sym and row is not None:
+                        g_bs = bs_gamma_value(spot, leg, row.get("IMPL_VOL"), day)
+                        if g_bs is not None:
+                            row["GAMMA"] = g_bs  # RTD GAMMA is 2-decimal (~0); use Black-Scholes
                         store.append_row(store.contract_path(tk, day, contract_sym), store.CONTRACT_HEADER, row)
 
             time.sleep(SERVER_REQUEST_COOLDOWN_FREQUENCY)

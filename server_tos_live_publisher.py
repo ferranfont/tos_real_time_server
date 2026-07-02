@@ -16,6 +16,7 @@ from get_near_ATM_strikes import build_payload
 from get_option_chain import fetch_and_save_expiration, fetch_and_save_nearest
 from symbol_map import underlying_symbol_from_option_root, yahoo_ticker_symbol
 from utils.black_scholes import bs_price, bs_greeks, DEFAULT_RATE
+from utils.api_health_check import run_checks
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 DATA_DIR = PROJECT_ROOT / "data"
@@ -742,6 +743,39 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
         self.send_header("Pragma", "no-cache")
         super().end_headers()
 
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/save-record":
+            self.serve_save_record()
+            return
+        self.send_error(404, "unknown POST")
+
+    def serve_save_record(self):
+        """Save a trading-record snapshot (PNG capture + JSON data) under
+        outputs/trading_record/<symbol>_<date>_<strikes>_<entry>[ _n].{png,json}."""
+        import base64
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except Exception as exc:  # noqa: BLE001
+            self._send_json({"error": f"JSON invalido: {exc}"})
+            return
+        base = re.sub(r"[^A-Za-z0-9._-]", "_", str(payload.get("filename") or "record")).strip("_") or "record"
+        folder = PROJECT_ROOT / "outputs" / "trading_record"
+        folder.mkdir(parents=True, exist_ok=True)
+        name, i = base, 2
+        while (folder / f"{name}.json").exists() or (folder / f"{name}.png").exists():
+            name, i = f"{base}_{i}", i + 1
+        try:
+            (folder / f"{name}.json").write_text(json.dumps(payload.get("record") or {}, indent=2), encoding="utf-8")
+            png = payload.get("png") or ""
+            if png.startswith("data:image/png;base64,"):
+                (folder / f"{name}.png").write_bytes(base64.b64decode(png.split(",", 1)[1]))
+        except Exception as exc:  # noqa: BLE001
+            self._send_json({"error": f"No se pudo guardar: {exc}"})
+            return
+        self._send_json({"ok": True, "name": name, "folder": "outputs/trading_record"})
+
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/api/tos-live-csv":
@@ -773,6 +807,9 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
             return
         if parsed.path == "/api/gamma-history":
             self.serve_gamma_history(parse_qs(parsed.query))
+            return
+        if parsed.path == "/api/health-check":
+            self.serve_health_check(parse_qs(parsed.query))
             return
         if parsed.path == "/api/start":
             self.serve_start(parse_qs(parsed.query))
@@ -1352,6 +1389,18 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
             return
         self._send_json(payload)
 
+    def serve_health_check(self, query):
+        ticker = (query.get("ticker") or [None])[0] or read_active_book().get("underlying") or "MU"
+        day = (query.get("date") or [None])[0] or date.today().isoformat()
+        try:
+            timeout = float((query.get("timeout") or [2.5])[0])
+        except (TypeError, ValueError):
+            timeout = 2.5
+        try:
+            fresh_seconds = int((query.get("fresh_seconds") or [180])[0])
+        except (TypeError, ValueError):
+            fresh_seconds = 180
+        self._send_json(run_checks(ticker=ticker, day=day, timeout=timeout, fresh_seconds=fresh_seconds))
     def _send_json(self, obj):
         body = json.dumps(obj).encode("utf-8")
         self.send_response(200)
