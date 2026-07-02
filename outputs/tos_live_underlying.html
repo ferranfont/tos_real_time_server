@@ -541,7 +541,7 @@
     .kpi-v { color: #e5eefb; font-size: 14px; font-weight: 700; }
     .gk-v { color: #e5eefb; font-size: 15px; font-weight: 800; }
     .kpi-v.pos, .gk-v.pos { color: #00e676; } .kpi-v.neg, .gk-v.neg { color: #ff3b4f; } .kpi-v.be { color: #22d3ee; }
-    .legs-tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    .legs-tbl { width: auto; border-collapse: collapse; font-size: 11.5px; }
     .legs-tbl th { color: #9fb0c3; font-weight: 600; text-align: right; padding: 4px 2px; border-bottom: 1px solid rgba(148,163,184,.18); font-size: 9.5px; text-transform: uppercase; white-space: nowrap; }
     .legs-tbl th:first-child, .legs-tbl td:first-child { text-align: left; }
     .legs-tbl td { text-align: right; padding: 4px 2px; color: #dbeafe; white-space: nowrap; line-height: 1.3; }
@@ -557,12 +557,12 @@
     /* STRAT view: hide Spot-only toolbar buttons; show Save only here. */
     .strat-mode #startBtn, .strat-mode #gammaToggle, .strat-mode #wallsToggle { display: none !important; }
     .save-record-btn { display: none; }
-    .strat-mode .save-record-btn { display: inline-flex; align-items: center; border-color: rgba(0,230,118,.5); }
-    .strat-mode .save-record-btn:hover { background: rgba(0,230,118,.15); color: #fff; }
-    .save-record-btn svg { width: 15px; height: 15px; }
+    .strat-mode .save-record-btn { display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; box-shadow: none; padding: 2px 4px; color: #7fe3b0; cursor: pointer; }
+    .strat-mode .save-record-btn:hover { background: transparent; color: #00e676; }
+    .save-record-btn svg { width: 16px; height: 16px; }
     .save-record-btn.saving { opacity: .55; }
-    .save-record-btn.save-ok { border-color: #00e676 !important; color: #00e676 !important; }
-    .save-record-btn.save-err { border-color: #ff3b4f !important; color: #ff3b4f !important; }
+    .save-record-btn.save-ok { color: #00e676 !important; }
+    .save-record-btn.save-err { color: #ff3b4f !important; }
     /* Design panels removed: payoff + PnL now fill the freed left space. */
     .strat-mode .payoff-chart { left: 24px; }
     .strat-mode .summary-panel { left: 24px; }
@@ -2003,14 +2003,16 @@
       const ivp = v => v != null ? Math.round(v * 100) + "%" : "--";
       const entryTime = d.anchorHM || "inicio";
       const dist = k => (Number.isFinite(d.spot) && d.spot) ? `${(k - d.spot) >= 0 ? "+" : "−"}${fmt1(Math.abs((k - d.spot) / d.spot * 100))}%` : "--";
+      const svDiff = v => Number.isFinite(v) ? `${v >= 0 ? "+" : "−"}${fmt2(Math.abs(v))}` : "--";
       const credSign = l => (l.ls === "S" ? 1 : -1);
       const legRow = l => {
         const g = l.greeks, cls = l.pnl >= 0 ? "pos" : "neg";
+        const diff = (Number.isFinite(l.prime) && Number.isFinite(l.entry)) ? l.prime - l.entry : null;
         return `<tr>
           <td><span class="pnl-side">${l.side.toUpperCase()}</span> ${fmt0(l.strike)} <span class="pnl-ls-${l.ls.toLowerCase()}">${l.ls}</span></td>
-          <td>${dist(l.strike)}</td><td>${entryTime}</td>
-          <td class="grp">${ivp(l.ivEntry)}</td><td>${ivp(l.iv)}</td>
-          <td class="grp">${fmt2(l.entry)}</td><td>${fmt2(l.prime)}</td><td class="${cls}">${svMoney(l.pnl)}</td>
+          <td>${entryTime}</td>
+          <td class="grp">${fmt2(l.entry)}</td><td>${fmt2(l.prime)}</td><td>${svDiff(diff)}</td><td class="${cls}">${svMoney(l.pnl)}</td>
+          <td class="grp">${dist(l.strike)}</td><td>${ivp(l.ivEntry)}</td><td>${ivp(l.iv)}</td>
           <td class="grp">${svG(g.delta, 2)}</td><td>${svG(g.gamma, 4)}</td><td>${svG(g.theta, 2)}</td><td>${svG(g.vega, 3)}</td></tr>`;
       };
       // Subtotal per strike (very light shading), grouping legs that share a strike.
@@ -2025,19 +2027,19 @@
           const pnl = grp.reduce((a, l) => a + l.pnl, 0);
           const entS = grp.reduce((a, l) => a + credSign(l) * (l.entry || 0), 0);
           const nowS = grp.reduce((a, l) => a + credSign(l) * (l.prime || 0), 0);
-          body += `<tr class="lg-sub"><td>Subtotal ${fmt0(k)}</td><td>${dist(k)}</td><td></td>
-            <td class="grp">${ivp(avg(grp.map(l => l.ivEntry)))}</td><td>${ivp(avg(grp.map(l => l.iv)))}</td>
-            <td class="grp">${fmt2(entS)}</td><td>${fmt2(nowS)}</td><td class="${pnl >= 0 ? "pos" : "neg"}">${svMoney(pnl)}</td>
+          body += `<tr class="lg-sub"><td>Subtotal ${fmt0(k)}</td><td></td>
+            <td class="grp">${fmt2(entS)}</td><td>${fmt2(nowS)}</td><td>${svDiff(nowS - entS)}</td><td class="${pnl >= 0 ? "pos" : "neg"}">${svMoney(pnl)}</td>
+            <td class="grp">${dist(k)}</td><td>${ivp(avg(grp.map(l => l.ivEntry)))}</td><td>${ivp(avg(grp.map(l => l.iv)))}</td>
             <td class="grp">${svG(sumG("delta"), 2)}</td><td>${svG(sumG("gamma"), 4)}</td><td>${svG(sumG("theta"), 2)}</td><td>${svG(sumG("vega"), 3)}</td></tr>`;
         }
       });
-      const ng = d.netGreeks, nc = d.netPnl >= 0 ? "pos" : "neg";
-      const net = `<tr class="lg-total ${nc}"><td>Net</td><td>--</td><td>${entryTime}</td>
-          <td class="grp">${ivp(d.avgIVentry)}</td><td>${ivp(d.avgIV)}</td>
-          <td class="grp">${fmt2(d.netEntry / 100)}</td><td>${fmt2(d.netNow / 100)}</td><td>${svMoney(d.netPnl)}</td>
+      const ng = d.netGreeks, nc = d.netPnl >= 0 ? "pos" : "neg", netDiff = (d.netNow - d.netEntry) / 100;
+      const net = `<tr class="lg-total ${nc}"><td>Net</td><td>${entryTime}</td>
+          <td class="grp">${fmt2(d.netEntry / 100)}</td><td>${fmt2(d.netNow / 100)}</td><td>${svDiff(netDiff)}</td><td>${svMoney(d.netPnl)}</td>
+          <td class="grp">--</td><td>${ivp(d.avgIVentry)}</td><td>${ivp(d.avgIV)}</td>
           <td class="grp">${svG(ng.delta, 2)}</td><td>${svG(ng.gamma, 4)}</td><td>${svG(ng.theta, 2)}</td><td>${svG(ng.vega, 3)}</td></tr>`;
       return `<div class="sv-h">Resultados por pata</div>
-        <table class="legs-tbl"><thead><tr><th>Pata</th><th>Dist</th><th>Entry</th><th class="grp">IV ent</th><th>IV now</th><th class="grp">Prima ent</th><th>Prima now</th><th>P&amp;L</th><th class="grp">Delta</th><th>Gamma</th><th>Theta</th><th>Vega</th></tr></thead>
+        <table class="legs-tbl"><thead><tr><th>Pata</th><th>Entry</th><th class="grp">Prima ent</th><th>Prima now</th><th>Diff</th><th>P&amp;L</th><th class="grp">Dist</th><th>IV ent</th><th>IV now</th><th class="grp">Delta</th><th>Gamma</th><th>Theta</th><th>Vega</th></tr></thead>
         <tbody>${body}${net}</tbody></table>`;
     }
     function drawPayoff(d) {
