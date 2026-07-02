@@ -2221,6 +2221,18 @@
           <tfoot><tr><td>Spread</td><td>${m(entryNet)}</td><td>${m(nowNet)}</td>${pnlTd(pnlNet)}</tr></tfoot>
         </table>`;
     }
+    // Visual-only EMA smoothing for the greek/IV/spread lines (raw data untouched;
+    // hover still shows the real value via customdata). Preserves gaps (nulls).
+    const GREEK_EMA = 9;
+    function emaSmooth(arr, period) {
+      const k = 2 / (period + 1);
+      let prev = null;
+      return arr.map(v => {
+        if (!Number.isFinite(v)) return null;
+        prev = prev === null ? v : v * k + prev * (1 - k);
+        return prev;
+      });
+    }
     function drawChart(rows, lastSpot) {
       if (state.stratMode) { Plotly.purge("chart"); return; }
       // Selected option series (multi-select from the STRIKES table). They share the
@@ -2258,7 +2270,8 @@
       const round1 = v => Math.round(v * 10) / 10;  // 1 decimal, robust (format alone doesn't round)
       const toPct = arr => {
         const base = (arr || []).find(v => Number.isFinite(v) && v !== 0);
-        return (pct && Number.isFinite(base)) ? arr.map(v => Number.isFinite(v) ? round1((v / base - 1) * 100) : v) : arr;
+        if (pct && Number.isFinite(base)) return arr.map(v => Number.isFinite(v) ? round1((v / base - 1) * 100) : v);
+        return arr.map(v => Number.isFinite(v) ? v * 100 : v);  // % OFF -> prima por contrato (x100), p.ej. 50 -> 5000
       };
       // Anchor ON: rebase every premium and the Spread to 0 at the entry moment.
       // % (default) or $ from the Primas %/$ toggle; the line is 0 at entry either way.
@@ -2280,13 +2293,15 @@
       // Hover value: $ for premiums/P&L, % for percent.
       const yfmt = pct
         ? (anchorActiveTs ? "%{y:+,.1f}%" : "%{y:,.1f}%")
-        : (anchorActiveTs ? "%{y:+,.0f} $" : "$%{y:,.2f}");
+        : (anchorActiveTs ? "%{y:+,.0f} $" : "%{y:,.0f} $");
       // With Anchor ON the lines are P&L vs entry, not the raw premium: label it so.
       const pnlTag = anchorActiveTs ? " PnL " : " / ";
+      // Premium lines are EMA-smoothed (visual); hover shows the real value via customdata.
+      const yfmtCd = yfmt.replace(/%\{y/g, "%{customdata");
       const trace = {
-        x, y, type: "scatter", mode: "lines", name: state.symbol, showlegend: false,
+        x, y: emaSmooth(y, GREEK_EMA), customdata: y, type: "scatter", mode: "lines", name: state.symbol, showlegend: false,
         line: { color: "#22d3ee", width: 3 },
-        hovertemplate: "%{x|%d/%m/%Y %H:%M}<br>Bid: %{y:,.2f}<extra></extra>"
+        hovertemplate: "%{x|%d/%m/%Y %H:%M}<br>Bid: %{customdata:,.2f}<extra></extra>"
       };
       // Premium (BID) overlay: every selected contract shares one right axis.
       const PUT_COLORS = ["#ff3b4f", "#ef4444", "#dc2626", "#fb7185", "#f43f5e", "#b91c1c", "#f87171", "#991b1b"];
@@ -2300,11 +2315,12 @@
         const leg = isCall ? data.call : data.put;
         if (!leg || !leg.t || !leg.t.length) return;
         const yv = yTransform(leg.t, leg.last);
+        const ys = emaSmooth(yv, GREEK_EMA);
         const color = isCall ? CALL_COLORS[callColorIdx++ % CALL_COLORS.length] : PUT_COLORS[putColorIdx++ % PUT_COLORS.length];
         const label = `${sel.side} ${sel.strike}`;
-        premiumTraces.push({ x: leg.t, y: yv, type: "scatter", mode: "lines", name: label,
-          yaxis: "y2", line: { color, width: 1 }, hovertemplate: `%{x|%d/%m/%Y %H:%M}<br>${label}${pnlTag}${yfmt}<extra></extra>` });
-        premiumX.push(...leg.t); y2Vals.push(...yv);
+        premiumTraces.push({ x: leg.t, y: ys, customdata: yv, type: "scatter", mode: "lines", name: label,
+          yaxis: "y2", line: { color, width: 1 }, hovertemplate: `%{x|%d/%m/%Y %H:%M}<br>${label}${pnlTag}${yfmtCd}<extra></extra>` });
+        premiumX.push(...leg.t); y2Vals.push(...ys);
       });
       // Spread line: net premium of the marked legs = sum(S/short) - sum(L/long),
       // adding every marked put and call, aligned by timestamp.
@@ -2331,10 +2347,11 @@
         st = order.map(i => st[i]);
         const syv = yTransform(st, order.map(i => sy[i]));
         if (st.length) {
-          premiumTraces.push({ x: st, y: syv, type: "scatter", mode: "lines", name: "Spread",
+          const ssv = emaSmooth(syv, GREEK_EMA);
+          premiumTraces.push({ x: st, y: ssv, customdata: syv, type: "scatter", mode: "lines", name: "Spread",
             yaxis: "y2", line: { color: "#1d4ed8", width: 2.8 },
-            hovertemplate: `%{x|%d/%m/%Y %H:%M}<br>Spread${pnlTag}${yfmt}<extra></extra>` });
-          premiumX.push(...st); y2Vals.push(...syv);
+            hovertemplate: `%{x|%d/%m/%Y %H:%M}<br>Spread${pnlTag}${yfmtCd}<extra></extra>` });
+          premiumX.push(...st); y2Vals.push(...ssv);
         }
       }
       const hasPremium = premiumTraces.length > 0;
@@ -2432,7 +2449,7 @@
         hovermode: "closest", dragmode: "pan",
         xaxis: { range: xRange, showgrid: false, color: "#dbeafe", showline: true, mirror: true, linecolor: "#3a4453", linewidth: 1, tickfont: { color: "#dbeafe", size: 10 }, zeroline: false },
         yaxis: { range: [yLo, yHi], showgrid: true, gridcolor: "#15191f", showline: true, mirror: true, linecolor: "#3a4453", linewidth: 1, color: "#cbd5e1", zeroline: false, tickformat: ",.2f" },
-        yaxis2: { overlaying: "y", side: "right", autorange: true, showgrid: false, showline: true, linecolor: "#3a4453", linewidth: 1, zeroline: (!!anchorActiveTs || pct), zerolinecolor: "rgba(29,78,216,0.4)", zerolinewidth: 1.5, color: "#cbd5e1", tickformat: pct ? ",.1f" : (anchorActiveTs ? ",.0f" : ",.2f"), ticksuffix: pct ? "%" : "" },
+        yaxis2: { overlaying: "y", side: "right", autorange: true, showgrid: false, showline: true, linecolor: "#3a4453", linewidth: 1, zeroline: (!!anchorActiveTs || pct), zerolinecolor: "rgba(29,78,216,0.4)", zerolinewidth: 1.5, color: "#cbd5e1", tickformat: pct ? ",.1f" : ",.0f", ticksuffix: pct ? "%" : "" },
         shapes: [
           chartFrameShape,
           { type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: lastSpot, y1: lastSpot, line: { color: "#22d3ee", width: 1 }, layer: "above" },
@@ -2495,11 +2512,12 @@
             if (!leg || !leg.t || !leg.t.length || !Array.isArray(leg[g.key])) return;
             const yv = leg[g.key].map(v => Number.isFinite(v) ? v : null);
             if (!yv.some(Number.isFinite)) return;
-            greekTraces.push({ x: leg.t, y: yv, type: "scatter", mode: "lines",
+            const ys = emaSmooth(yv, GREEK_EMA);
+            greekTraces.push({ x: leg.t, y: ys, customdata: yv, type: "scatter", mode: "lines",
               name: `${g.name} ${sel.side} ${sel.strike}`, yaxis: g.ref,
               line: { color: g.color, width: 1 }, connectgaps: true, showlegend: false,
-              hovertemplate: `%{x|%d/%m %H:%M}<br>${g.name} ${sel.side} ${sel.strike}: %{y:${g.fmt}}<extra></extra>` });
-            yv.forEach(v => { if (Number.isFinite(v)) vals.push(v); });
+              hovertemplate: `%{x|%d/%m %H:%M}<br>${g.name} ${sel.side} ${sel.strike}: %{customdata:${g.fmt}}<extra></extra>` });
+            ys.forEach(v => { if (Number.isFinite(v)) vals.push(v); });
           });
           // Spread = net of THIS greek across the marked legs (sign like the premium
           // Spread: +short / -long). Only for the active greek; can exceed a single-leg
@@ -2523,11 +2541,12 @@
             const ord = st.map((_, i) => i).sort((a, b) => st[a] < st[b] ? -1 : st[a] > st[b] ? 1 : 0);
             st = ord.map(i => st[i]); sy = ord.map(i => sy[i]);
             if (st.length) {
-              greekTraces.push({ x: st, y: sy, type: "scatter", mode: "lines",
+              const ss = emaSmooth(sy, GREEK_EMA);
+              greekTraces.push({ x: st, y: ss, customdata: sy, type: "scatter", mode: "lines",
                 name: `Spread ${g.name}`, yaxis: g.ref,
-                line: { color: "#1d4ed8", width: 1.7 }, connectgaps: true, showlegend: false,
-                hovertemplate: `%{x|%d/%m %H:%M}<br>Spread ${g.name}: %{y:${g.fmt}}<extra></extra>` });
-              sy.forEach(v => { if (Number.isFinite(v)) vals.push(v); });
+                line: { color: g.color, width: 1.7 }, connectgaps: true, showlegend: false,
+                hovertemplate: `%{x|%d/%m %H:%M}<br>Spread ${g.name}: %{customdata:${g.fmt}}<extra></extra>` });
+              ss.forEach(v => { if (Number.isFinite(v)) vals.push(v); });
             }
           }
           if (!vals.length) return;
@@ -2555,11 +2574,12 @@
           if (!leg || !leg.t || !leg.t.length || !Array.isArray(leg.impl_vol)) return;
           const yv = leg.impl_vol.map(v => Number.isFinite(v) ? v : null);
           if (!yv.some(Number.isFinite)) return;
-          ivTraces.push({ x: leg.t, y: yv, type: "scatter", mode: "lines",
+          const ys = emaSmooth(yv, GREEK_EMA);
+          ivTraces.push({ x: leg.t, y: ys, customdata: yv, type: "scatter", mode: "lines",
             name: `IV ${sel.side} ${sel.strike}`, yaxis: "y7",
             line: { color: "#8b5cf6", width: 1 }, connectgaps: true, showlegend: false,
-            hovertemplate: `%{x|%d/%m %H:%M}<br>IV ${sel.side} ${sel.strike}: %{y:.1%}<extra></extra>` });
-          yv.forEach(v => { if (Number.isFinite(v)) ivVals.push(v); });
+            hovertemplate: `%{x|%d/%m %H:%M}<br>IV ${sel.side} ${sel.strike}: %{customdata:.1%}<extra></extra>` });
+          ys.forEach(v => { if (Number.isFinite(v)) ivVals.push(v); });
         });
         if (ivVals.length) {
           let lo = Math.min(...ivVals), hi = Math.max(...ivVals);
