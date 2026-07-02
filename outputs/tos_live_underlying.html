@@ -696,7 +696,7 @@
   </style>
 </head>
 <body>
-  <div class="stage"><div id="chart"></div><div class="greek-controls"><span id="greekSubs" class="greek-subs" hidden><button id="greekDeltaBtn" class="file-btn greek-sub gk-delta" type="button" title="Delta">Delta</button><button id="greekGammaBtn" class="file-btn greek-sub gk-gamma" type="button" title="Anadir Gamma">Gamma</button><button id="greekThetaBtn" class="file-btn greek-sub gk-theta" type="button" title="Anadir Theta">Theta</button><button id="greekVegaBtn" class="file-btn greek-sub gk-vega" type="button" title="Anadir Vega">Vega</button></span><button id="gammaToggle" class="file-btn" type="button" title="Perfil de gamma por strike">GEX</button><button id="ivToggle" class="file-btn iv-btn iv-float" type="button" title="Curva de volatilidad implicita (IV) en el tiempo">IV</button><button id="greekSpreadBtn" class="file-btn gk-spread spread-float" type="button" title="All/Legs/Spread: detalle por pata y/o neto de griegas e IV">All</button></div></div>
+  <div class="stage"><div id="chart"></div><div class="greek-controls"><span id="greekSubs" class="greek-subs" hidden><button id="greekDeltaBtn" class="file-btn greek-sub gk-delta" type="button" title="Delta">Delta</button><button id="greekGammaBtn" class="file-btn greek-sub gk-gamma" type="button" title="Anadir Gamma">Gamma</button><button id="greekThetaBtn" class="file-btn greek-sub gk-theta" type="button" title="Anadir Theta">Theta</button><button id="greekVegaBtn" class="file-btn greek-sub gk-vega" type="button" title="Anadir Vega">Vega</button></span><button id="greeksToggle" class="file-btn" type="button" title="Griegas: Delta de la opcion seleccionada en el tiempo (Gamma/Theta/Vega con sus botones dentro del chart)">Greeks</button><button id="ivToggle" class="file-btn iv-btn iv-float" type="button" title="Curva de volatilidad implicita (IV) en el tiempo">IV</button><button id="greekSpreadBtn" class="file-btn gk-spread spread-float" type="button" title="All/Legs/Spread: detalle por pata y/o neto de griegas e IV">All</button></div></div>
   <div id="empty" class="empty">Conecta el CSV para pintar la linea bid del subyacente.</div>
 
   <div class="topbar">
@@ -706,7 +706,7 @@
       <select id="symbolSelect" aria-label="Simbolo"><option>MU</option></select>
       <button id="startBtn" class="file-btn top-start" type="button" title="Reset + escalera ATM 12 por lado de la expiracion mas cercana">START</button>
       <span id="startStatus" class="top-start-status"></span>
-      <button id="greeksToggle" class="file-btn" type="button" title="Griegas: Delta de la opcion seleccionada en el tiempo (Gamma/Theta/Vega con sus botones dentro del chart)">Greeks</button>
+      <button id="gammaToggle" class="file-btn" type="button" title="Perfil de gamma por strike">GEX</button>
       <button id="wallsToggle" class="file-btn" type="button" title="Muros de gamma + variacion 5/15/30m">Walls</button>
       <button id="chainToggle" class="file-btn" type="button" title="Abrir STRAT en nueva pestana" aria-label="Abrir STRAT en nueva pestana"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M17 7 7 17"/><path d="M14 21H5a2 2 0 0 1-2-2V10"/></svg></button>
       <input id="csvInput" type="file" accept=".csv,text/csv">
