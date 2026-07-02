@@ -19,6 +19,7 @@
       --cyan: #22d3ee;
       --cyan2: #0891b2;
       --green: #00e676;
+      --active-text: #00e676;
       --red: #ff3b4f;
       --yellow: #ffe600;
     }
@@ -87,8 +88,21 @@
     .pill.active:hover, .file-btn.active:hover {
       border-color: var(--green);
       background: rgba(0,230,118,.15);
-      color: #fff;
     }
+    .pill:hover, .file-btn:hover { color: #fff; }
+    .pill.active, .file-btn.active,
+    .pill.active:hover, .file-btn.active:hover { color: var(--active-text); }
+    .greek-subs { position: absolute; top: 31px; left: 50%; transform: translateX(-50%); z-index: 30; display: inline-flex; gap: 5px;
+      padding: 3px 5px; background: rgba(5,8,13,.55); border: 1px solid rgba(148,163,184,.18); border-radius: 8px; }
+    .greek-subs[hidden] { display: none; }
+    .greek-sub { padding: 2px 7px; font-size: 8px; }
+    .greek-sub.gk-delta.active, .greek-sub.gk-delta.active:hover { border-color: #f97316; background: rgba(249,115,22,.16); color: #f97316; }
+    .greek-sub.gk-gamma.active, .greek-sub.gk-gamma.active:hover { border-color: #e879f9; background: rgba(232,121,249,.16); color: #e879f9; }
+    .greek-sub.gk-theta.active, .greek-sub.gk-theta.active:hover { border-color: #bdb76b; background: rgba(189,183,107,.16); color: #bdb76b; }
+    .greek-sub.gk-vega.active,  .greek-sub.gk-vega.active:hover  { border-color: #a3e635; background: rgba(163,230,53,.16); color: #a3e635; }
+    .greek-sub.gk-spread.active, .greek-sub.gk-spread.active:hover { border-color: #1d4ed8; background: rgba(29,78,216,.22); color: #93b4ff; }
+    .file-btn.iv-btn.active, .file-btn.iv-btn.active:hover { border-color: #8b5cf6; background: rgba(139,92,246,.18); color: #8b5cf6; }
+    .iv-float { position: absolute; top: 31px; right: 372px; z-index: 30; font-size: 13px; padding: 6px 13px; }
     select { width: 74px; outline: none; appearance: none; text-align: center; border: 0; background: transparent; }
     input[type=file] { display: none; }
     .spot-card {
@@ -244,7 +258,8 @@
       font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; letter-spacing: .03em;
     }
     .anchor-btn:hover { border-color: var(--green); background: rgba(0,230,118,.15); color: #fff; }
-    .anchor-btn.set { border-color: var(--green); background: rgba(0,230,118,.16); color: #eafff4; }
+    .anchor-btn.set { border-color: var(--green); background: rgba(0,230,118,.16); color: var(--active-text); }
+    .anchor-btn.set:hover { color: var(--active-text); }
     .anchor-status { flex: 1 1 100%; color: #94a3b8; font-size: 10px; font-weight: 700; }
     .anchor-status.set { color: var(--green); }
     /* Anchor P&L: per-leg + spread, entry/now premium (x100) and live P&L. */
@@ -601,15 +616,15 @@
       cursor: pointer; letter-spacing: .03em;
     }
     .ul-toggle:hover { border-color: var(--green); background: rgba(0,230,118,.15); color: #fff; }
-    .ul-toggle.off { border-color: rgba(0,230,118,.55); background: rgba(0,230,118,.10); color: #eafff4; }
-    .ul-toggle.off:hover { border-color: var(--green); background: rgba(0,230,118,.18); color: #fff; }
+    .ul-toggle.off { border-color: rgba(0,230,118,.55); background: rgba(0,230,118,.10); color: var(--active-text); }
+    .ul-toggle.off:hover { border-color: var(--green); background: rgba(0,230,118,.18); color: var(--active-text); }
     .ul-toggle[hidden] { display: none; }
     .strat-mode .ul-toggle { display: none; }
     .mode-pills { display: none; }
     .right-tools select { display: none; }
-    .pct-toggle { top: 68px; right: 330px; bottom: auto; width: 36px; min-width: 36px; padding: 0; }
+    .pct-toggle { top: auto; right: 330px; bottom: 18px; width: 36px; min-width: 36px; padding: 0; }
     #toggleUnderlying { top: 105px; right: 35px; bottom: auto; width: 82px; min-width: 82px; padding: 0 5px; }
-    .ul-toggle.on { border-color: var(--green); background: rgba(0,230,118,.18); color: #fff; }
+    .ul-toggle.on { border-color: var(--green); background: rgba(0,230,118,.18); color: var(--active-text); }
     .session-toggle { left: 6px; right: auto; top: auto; bottom: 8px; width: 56px; min-width: 56px; height: 24px; padding: 0; }
     .status {
       position: fixed;
@@ -651,7 +666,7 @@
   </style>
 </head>
 <body>
-  <div class="stage"><div id="chart"></div></div>
+  <div class="stage"><div id="chart"></div><span id="greekSubs" class="greek-subs" hidden><button id="greekDeltaBtn" class="file-btn greek-sub gk-delta" type="button" title="Delta">Delta</button><button id="greekGammaBtn" class="file-btn greek-sub gk-gamma" type="button" title="Anadir Gamma">Gamma</button><button id="greekThetaBtn" class="file-btn greek-sub gk-theta" type="button" title="Anadir Theta">Theta</button><button id="greekVegaBtn" class="file-btn greek-sub gk-vega" type="button" title="Anadir Vega">Vega</button><button id="greekSpreadBtn" class="file-btn greek-sub gk-spread" type="button" title="Neto (spread) de la griega activa: suma de las patas marcadas">Spread</button></span><button id="ivToggle" class="file-btn iv-btn iv-float" type="button" title="Curva de volatilidad implicita (IV) en el tiempo">IV</button></div>
   <div id="empty" class="empty">Conecta el CSV para pintar la linea bid del subyacente.</div>
 
   <div class="topbar">
@@ -661,6 +676,7 @@
       <select id="symbolSelect" aria-label="Simbolo"><option>MU</option></select>
       <button id="startBtn" class="file-btn top-start" type="button" title="Reset + escalera ATM 12 por lado de la expiracion mas cercana">START</button>
       <span id="startStatus" class="top-start-status"></span>
+      <button id="greeksToggle" class="file-btn" type="button" title="Griegas: Delta de la opcion seleccionada en el tiempo (Gamma/Theta/Vega con sus botones dentro del chart)">Greeks</button>
       <button id="gammaToggle" class="file-btn" type="button" title="Perfil de gamma por strike">Gamma</button>
       <button id="wallsToggle" class="file-btn" type="button" title="Muros de gamma + variacion 5/15/30m">Walls</button>
       <button id="chainToggle" class="file-btn" type="button">Strat</button>
@@ -792,7 +808,7 @@
       } catch (_) {}
       return null;
     }
-    const state = { rows: [], symbol: initialSymbol(), file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null, payoffLoading: false, lastPayoffRefreshKey: null, premium: null, premiumPast: false, premiumDay: null, selected: [], series: {}, anchorEntry: null, anchorActive: false, showGamma: false, showWalls: false, showGammaHistory: false, gamma: null, latestDay: null, previousClose: null, hideUnderlying: false, premiumPct: false, expirations: null, tickers: [], rangeMode: initialRangeMode(), chartConfig: { use_rth_only: true, rth_start_bcn: "15:30", rth_end_bcn: "22:50", rth_timezone: "BCN" }, chartRangeKey: "" };
+    const state = { rows: [], symbol: initialSymbol(), file: null, timer: null, httpMode: location.protocol !== "file:", userRange: null, applyingLayout: false, stratMode: false, nearAtm: null, selectedStrike: null, selectedPutStrike: null, selectedCallStrike: null, strategy: null, payoff: null, activeStrategy: null, defaultStrategyApplied: false, sendCtx: null, payoffLoading: false, lastPayoffRefreshKey: null, premium: null, premiumPast: false, premiumDay: null, selected: [], series: {}, anchorEntry: null, anchorActive: false, showGamma: false, showWalls: false, showGammaHistory: false, showGreeks: false, greekDelta: true, greekGamma: false, greekTheta: false, greekVega: false, greekSpread: false, greekActiveAxis: "delta", showIV: false, gamma: null, latestDay: null, previousClose: null, hideUnderlying: false, premiumPct: false, expirations: null, tickers: [], rangeMode: initialRangeMode(), chartConfig: { use_rth_only: true, rth_start_bcn: "15:30", rth_end_bcn: "22:50", rth_timezone: "BCN" }, chartRangeKey: "" };
     const $ = id => document.getElementById(id);
 
     function parseCsv(text) {
@@ -2265,6 +2281,8 @@
       const yfmt = pct
         ? (anchorActiveTs ? "%{y:+,.1f}%" : "%{y:,.1f}%")
         : (anchorActiveTs ? "%{y:+,.0f} $" : "$%{y:,.2f}");
+      // With Anchor ON the lines are P&L vs entry, not the raw premium: label it so.
+      const pnlTag = anchorActiveTs ? " PnL " : " / ";
       const trace = {
         x, y, type: "scatter", mode: "lines", name: state.symbol, showlegend: false,
         line: { color: "#22d3ee", width: 3 },
@@ -2285,7 +2303,7 @@
         const color = isCall ? CALL_COLORS[callColorIdx++ % CALL_COLORS.length] : PUT_COLORS[putColorIdx++ % PUT_COLORS.length];
         const label = `${sel.side} ${sel.strike}`;
         premiumTraces.push({ x: leg.t, y: yv, type: "scatter", mode: "lines", name: label,
-          yaxis: "y2", line: { color, width: 1 }, hovertemplate: `%{x|%d/%m/%Y %H:%M}<br>${label} / ${yfmt}<extra></extra>` });
+          yaxis: "y2", line: { color, width: 1 }, hovertemplate: `%{x|%d/%m/%Y %H:%M}<br>${label}${pnlTag}${yfmt}<extra></extra>` });
         premiumX.push(...leg.t); y2Vals.push(...yv);
       });
       // Spread line: net premium of the marked legs = sum(S/short) - sum(L/long),
@@ -2315,7 +2333,7 @@
         if (st.length) {
           premiumTraces.push({ x: st, y: syv, type: "scatter", mode: "lines", name: "Spread",
             yaxis: "y2", line: { color: "#1d4ed8", width: 2.8 },
-            hovertemplate: `%{x|%d/%m/%Y %H:%M}<br>Spread / ${yfmt}<extra></extra>` });
+            hovertemplate: `%{x|%d/%m/%Y %H:%M}<br>Spread${pnlTag}${yfmt}<extra></extra>` });
           premiumX.push(...st); y2Vals.push(...syv);
         }
       }
@@ -2457,8 +2475,107 @@
         if (a) gammaHistTraces.push(a);
         if (b) gammaHistTraces.push(b);
       }
+      // Greeks: option greeks over time (solid, width 1). Delta shows whenever Greeks is
+      // on; Gamma/Theta/Vega are added with their own sub-buttons. Each greek has its own
+      // overlaid left y-axis (very different scales); only Delta shows a scale ([-1,1]),
+      // the rest are identified by legend colour + hover. One line per selected contract.
+      const greekTraces = [];
+      if (state.showGreeks) {
+        const GREEKS = [
+          { key: "delta", axis: "yaxis3", ref: "y3", color: "#f97316", name: "Delta", clamp: [-1, 1], fmt: ".2f", on: state.greekDelta },
+          { key: "gamma", axis: "yaxis4", ref: "y4", color: "#e879f9", name: "Gamma", clamp: null,     fmt: ".4f", on: state.greekGamma },
+          { key: "theta", axis: "yaxis5", ref: "y5", color: "#bdb76b", name: "Theta", clamp: null,     fmt: ".2f", on: state.greekTheta },
+          { key: "vega",  axis: "yaxis6", ref: "y6", color: "#a3e635", name: "Vega",  clamp: null,     fmt: ".3f", on: state.greekVega },
+        ];
+        GREEKS.forEach(g => {
+          if (!g.on) return;
+          const vals = [];
+          selSeries.forEach(({ sel, data }) => {
+            const leg = sel.side === "call" ? data.call : data.put;
+            if (!leg || !leg.t || !leg.t.length || !Array.isArray(leg[g.key])) return;
+            const yv = leg[g.key].map(v => Number.isFinite(v) ? v : null);
+            if (!yv.some(Number.isFinite)) return;
+            greekTraces.push({ x: leg.t, y: yv, type: "scatter", mode: "lines",
+              name: `${g.name} ${sel.side} ${sel.strike}`, yaxis: g.ref,
+              line: { color: g.color, width: 1 }, connectgaps: true, showlegend: false,
+              hovertemplate: `%{x|%d/%m %H:%M}<br>${g.name} ${sel.side} ${sel.strike}: %{y:${g.fmt}}<extra></extra>` });
+            yv.forEach(v => { if (Number.isFinite(v)) vals.push(v); });
+          });
+          // Spread = net of THIS greek across the marked legs (sign like the premium
+          // Spread: +short / -long). Only for the active greek; can exceed a single-leg
+          // range (e.g. two deltas -> up to +-2), so we don't clamp when it's shown.
+          const withSpread = state.greekSpread && (g.key === state.greekActiveAxis);
+          if (withSpread) {
+            const acc = new Map(); let n = 0;
+            selSeries.forEach(({ sel, data }) => {
+              const leg = sel.side === "call" ? data.call : data.put;
+              if (!leg || !leg.t || !Array.isArray(leg[g.key])) return;
+              const sign = legSign(sel.strike, sel.side); n++;
+              for (let i = 0; i < leg.t.length; i++) {
+                const v = Number(leg[g.key][i]);
+                if (!Number.isFinite(v)) continue;
+                const e = acc.get(leg.t[i]) || { s: 0, c: 0 };
+                e.s += sign * v; e.c++; acc.set(leg.t[i], e);
+              }
+            });
+            let st = [], sy = [];
+            for (const [ts, e] of acc) if (n > 0 && e.c === n) { st.push(ts); sy.push(e.s); }
+            const ord = st.map((_, i) => i).sort((a, b) => st[a] < st[b] ? -1 : st[a] > st[b] ? 1 : 0);
+            st = ord.map(i => st[i]); sy = ord.map(i => sy[i]);
+            if (st.length) {
+              greekTraces.push({ x: st, y: sy, type: "scatter", mode: "lines",
+                name: `Spread ${g.name}`, yaxis: g.ref,
+                line: { color: "#1d4ed8", width: 1.7 }, connectgaps: true, showlegend: false,
+                hovertemplate: `%{x|%d/%m %H:%M}<br>Spread ${g.name}: %{y:${g.fmt}}<extra></extra>` });
+              sy.forEach(v => { if (Number.isFinite(v)) vals.push(v); });
+            }
+          }
+          if (!vals.length) return;
+          let lo = Math.min(...vals), hi = Math.max(...vals);
+          const span = hi - lo;
+          const pad = span > 1e-9 ? span * 0.15 : Math.max(Math.abs(hi) * 0.5, 1e-4);
+          lo -= pad; hi += pad;
+          if (g.clamp && !withSpread) { lo = Math.max(g.clamp[0], lo); hi = Math.min(g.clamp[1], hi); }
+          const isActiveAxis = (g.key === state.greekActiveAxis);
+          layout[g.axis] = {
+            overlaying: "y", side: "left", anchor: "free", position: 0,
+            range: [lo, hi], visible: isActiveAxis, showgrid: false, zeroline: false,
+            showticklabels: isActiveAxis, showline: false, ticks: "",
+            color: g.color, tickfont: { color: g.color, size: 9 },
+            ticklabelposition: "inside", tickformat: g.fmt
+          };
+        });
+      }
+      // IV: implied-volatility curve over time (violet), independent of Greeks, own axis (y7).
+      const ivTraces = [];
+      if (state.showIV) {
+        const ivVals = [];
+        selSeries.forEach(({ sel, data }) => {
+          const leg = sel.side === "call" ? data.call : data.put;
+          if (!leg || !leg.t || !leg.t.length || !Array.isArray(leg.impl_vol)) return;
+          const yv = leg.impl_vol.map(v => Number.isFinite(v) ? v : null);
+          if (!yv.some(Number.isFinite)) return;
+          ivTraces.push({ x: leg.t, y: yv, type: "scatter", mode: "lines",
+            name: `IV ${sel.side} ${sel.strike}`, yaxis: "y7",
+            line: { color: "#8b5cf6", width: 1 }, connectgaps: true, showlegend: false,
+            hovertemplate: `%{x|%d/%m %H:%M}<br>IV ${sel.side} ${sel.strike}: %{y:.1%}<extra></extra>` });
+          yv.forEach(v => { if (Number.isFinite(v)) ivVals.push(v); });
+        });
+        if (ivVals.length) {
+          let lo = Math.min(...ivVals), hi = Math.max(...ivVals);
+          const span = hi - lo, pad = span > 1e-9 ? span * 0.15 : Math.max(Math.abs(hi) * 0.5, 1e-4);
+          lo -= pad; hi += pad;
+          layout.yaxis7 = {
+            overlaying: "y", side: "left", anchor: "free", position: 0,
+            range: [Math.max(0, lo), hi], visible: true, showgrid: false, zeroline: false,
+            showticklabels: true, showline: false, ticks: "",
+            color: "#8b5cf6", tickfont: { color: "#8b5cf6", size: 9 },
+            ticklabelposition: "inside", tickformat: ".0%"
+          };
+        }
+      }
       // Toggle: hide the underlying line, but keep the chart frame/axes visible.
-      const chartTraces = state.hideUnderlying ? [...gammaHistTraces, ...premiumTraces] : [...gammaHistTraces, trace, ...premiumTraces];
+      const chartTraces = state.hideUnderlying ? [...gammaHistTraces, ...premiumTraces, ...greekTraces, ...ivTraces] : [...gammaHistTraces, trace, ...premiumTraces, ...greekTraces, ...ivTraces];
       if (state.hideUnderlying) {
         layout.shapes = [chartFrameShape, ...gammaShapes, ...wallShapes, ...strikeOverlays.shapes, ...anchorOverlay.shapes];
         layout.annotations = [...wallAnnos, ...strikeOverlays.annotations, ...anchorOverlay.annotations];
@@ -2599,6 +2716,47 @@
       state.showGamma = !state.showGamma;
       $("gammaToggle").classList.toggle("active", state.showGamma);
       if (state.showGamma) await loadGamma(); else if (!state.showWalls) state.gamma = null;
+      render();
+    });
+    // Greeks: draw the selected option's delta over time (needs the premium series,
+    // which now carries delta). Refresh the series so delta is fresh when turned on.
+    $("greeksToggle").addEventListener("click", async () => {
+      state.showGreeks = !state.showGreeks;
+      $("greeksToggle").classList.toggle("active", state.showGreeks);
+      $("greekSubs").hidden = !state.showGreeks;  // per-greek buttons only while Greeks is on
+      if (state.showGreeks) {
+        [["greekDeltaBtn", "greekDelta"], ["greekGammaBtn", "greekGamma"], ["greekThetaBtn", "greekTheta"], ["greekVegaBtn", "greekVega"], ["greekSpreadBtn", "greekSpread"]]
+          .forEach(([id, flag]) => $(id).classList.toggle("active", state[flag]));  // reflect current on/off
+        if (state.selected.length) await refreshSelectedSeries();
+      }
+      render();
+    });
+    // IV: independent toggle for the implied-volatility curve (violet, own axis).
+    $("ivToggle").addEventListener("click", async () => {
+      state.showIV = !state.showIV;
+      $("ivToggle").classList.toggle("active", state.showIV);
+      if (state.showIV && state.selected.length) await refreshSelectedSeries();
+      render();
+    });
+    // Per-greek toggles (Delta/Gamma/Theta/Vega). Pressing one shows its line AND makes
+    // the left axis switch to that greek's scale (greekActiveAxis = last pressed on).
+    [["greekDeltaBtn", "greekDelta", "delta"], ["greekGammaBtn", "greekGamma", "gamma"], ["greekThetaBtn", "greekTheta", "theta"], ["greekVegaBtn", "greekVega", "vega"]].forEach(([id, flag, key]) => {
+      $(id).addEventListener("click", () => {
+        state[flag] = !state[flag];
+        $(id).classList.toggle("active", state[flag]);
+        if (state[flag]) {
+          state.greekActiveAxis = key;
+        } else if (state.greekActiveAxis === key) {
+          const on = [["greekDelta", "delta"], ["greekGamma", "gamma"], ["greekTheta", "theta"], ["greekVega", "vega"]].find(([f]) => state[f]);
+          state.greekActiveAxis = on ? on[1] : null;
+        }
+        render();
+      });
+    });
+    // Spread: net of the active greek across the marked legs (does not change the axis).
+    $("greekSpreadBtn").addEventListener("click", () => {
+      state.greekSpread = !state.greekSpread;
+      $("greekSpreadBtn").classList.toggle("active", state.greekSpread);
       render();
     });
     // Walls: gamma walls (major +/-) as reference lines + a floating box with the

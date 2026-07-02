@@ -388,17 +388,28 @@ def session_premium(ticker, day, strike, expiration=None):
 
     normalized = bool(idx.get("normalized"))
 
+    greek_cols = ("DELTA", "GAMMA", "THETA", "VEGA", "IMPL_VOL")
+
     def leg_series(fname):
         out_t, out_v = [], []
-        if fname:
-            for ts, raw in store.read_series(sdir / fname, "BID"):
-                if not use_row_for_plot(ts, day):
-                    continue
-                price = _num(raw) if normalized else _scale_option_price(raw, "BID")
-                if price is not None:
+        out_g = {g.lower(): [] for g in greek_cols}  # delta/gamma/theta/vega aligned with out_t
+        path = sdir / fname if fname else None
+        if path and path.exists():
+            with open(path, newline="", encoding="utf-8") as f:  # one pass: BID + greeks aligned
+                for row in csv.DictReader(f):
+                    ts = row.get("timestamp", "")
+                    if not use_row_for_plot(ts, day):
+                        continue
+                    raw = row.get("BID", "")
+                    price = _num(raw) if normalized else _scale_option_price(raw, "BID")
+                    if price is None:
+                        continue
                     out_t.append(ts)
                     out_v.append(round(price, 4))
-        return {"t": out_t, "last": out_v}
+                    for g in greek_cols:
+                        gv = _num(row.get(g, ""))
+                        out_g[g.lower()].append(round(gv, 6) if gv is not None else None)
+        return {"t": out_t, "last": out_v, **out_g}
 
     under_t, under_b, seen = [], [], set()
     for ts, raw in store.read_series(store.underlying_path(ticker, day), "UNDERLYING_BID"):
@@ -1138,7 +1149,8 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
             i = idx.get(name)
             return row[i].strip() if i is not None and i < len(row) else ""
 
-        series = {"CALL": {"t": [], "last": []}, "PUT": {"t": [], "last": []}}
+        greek_cols = ("DELTA", "GAMMA", "THETA", "VEGA", "IMPL_VOL")
+        series = {leg: {"t": [], "last": [], "delta": [], "gamma": [], "theta": [], "vega": [], "impl_vol": []} for leg in ("CALL", "PUT")}
         under = {}  # timestamp -> underlying bid (one per timestamp, shared by both legs)
         for row in rows[1:]:
             if not row:
@@ -1165,6 +1177,11 @@ class TosLiveHandler(SimpleHTTPRequestHandler):
             if leg in series:
                 series[leg]["t"].append(ts)
                 series[leg]["last"].append(round(last, 4))
+                for gc in greek_cols:
+                    try:
+                        series[leg][gc.lower()].append(round(float(cell(row, gc)), 6))
+                    except ValueError:
+                        series[leg][gc.lower()].append(None)
 
         self._send_json({
             "strike": target,
